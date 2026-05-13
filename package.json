@@ -1,0 +1,20 @@
+{
+  "name": "lounch-koudougou-ak",
+  "version": "1.0.0",
+  "description": "Logiciel de gestion LOUNCH KOUDOUGOU AK",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
