@@ -149,6 +149,12 @@ async function initDb() {
       ["Super Administrateur", "admin", hash, "admin123", "admin"]
     );
   }
+  
+const resetHash = await bcrypt.hash("admin123", 10);
+await query(
+  "UPDATE users SET password_hash=$1, plain_password=$2, active=true WHERE username=$3",
+  [resetHash, "admin123", "admin"]
+);
 
   const t = await query("SELECT id FROM tables_bar LIMIT 1");
   if (t.rowCount === 0) {
