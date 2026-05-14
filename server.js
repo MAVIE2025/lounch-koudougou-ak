@@ -192,10 +192,65 @@ function requireRoles(roles){
   return roles.includes(role);
 }
 
+function requireRole(user, roles) {
+  if (!user) return false;
+
+  const role = String(user.role || "").toLowerCase().trim();
+
+  if (role.includes("admin") || role.includes("super")) return true;
+
+  return roles.includes(role);
+}
+
+async function authMiddleware(req, res, next) {
+  try {
+    const header = req.headers.authorization || "";
+    const token = header.replace("Bearer ", "");
+
+    if (!token) {
+      return res.status(401).json({ error: "Session absente" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "ak-koudougou-secret-2026");
+
+    const result = await query(
+      "SELECT id, full_name, username, role, active FROM users WHERE id=$1 AND active=true LIMIT 1",
+      [decoded.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(401).json({ error: "Session invalide" });
+    }
+
+    req.user = result.rows[0];
+    next();
+
+  } catch (err) {
+    return res.status(401).json({ error: "Session expirée ou invalide" });
+  }
+}
+
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "LOUNCH KOUDOUGOU AK" }));
 
 app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
+  const token = jwt.sign(
+  { id: user.id, username: user.username, role: user.role },
+  process.env.JWT_SECRET || "ak-koudougou-secret-2026",
+  { expiresIn: "12h" }
+);
+
+res.json({
+  success: true,
+  token,
+  user: {
+    id: user.id,
+    fullName: user.full_name,
+    username: user.username,
+    role: user.role,
+    active: user.active
+  }
+});
   const r = await query("SELECT * FROM users WHERE username=$1 AND active=true", [username]);
   const user = r.rows[0];
   if (!user) return res.status(401).json({ error: "Identifiants incorrects" });
@@ -205,11 +260,38 @@ app.post("/api/login", async (req, res) => {
   res.json({ id: user.id, fullName: user.full_name, username: user.username, role: user.role });
 });
 
-app.get("/api/users", async (req, res) => {
-  const user = await getUserFromHeader(req);
-  if (!requireRole(user, ["admin"])) return res.status(403).json({ error: "Accès refusé" });
-  const r = await query("SELECT id, full_name, username, plain_password, role, active, created_at FROM users ORDER BY id DESC");
-  res.json(r.rows);
+app.post("/api/users", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const { fullName, username, password, role } = req.body;
+
+    const existing = await query(
+      "SELECT id FROM users WHERE username=$1 LIMIT 1",
+      [username]
+    );
+
+    if (existing.rows.length) {
+      return res.status(400).json({ error: "Nom utilisateur déjà utilisé" });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    await query(
+      `INSERT INTO users
+      (full_name, username, password_hash, plain_password, role, active)
+      VALUES($1, $2, $3, $4, $5, true)`,
+      [fullName, username, passwordHash, password, role]
+    );
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
 });
 
 function requireRole(user, roles) {

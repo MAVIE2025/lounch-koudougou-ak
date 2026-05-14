@@ -53,6 +53,7 @@ async function login(){
     }
 
     const user = data.user || data;
+    sessionStorage.setItem("lounch_token", data.token);
 
     currentUser = {
       id: user.id,
@@ -113,8 +114,9 @@ async function saveUser(){
     const res = await fetch("/api/users",{
       method:"POST",
       headers:{
-        "Content-Type":"application/json"
-      },
+  "Content-Type":"application/json",
+  "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+},
       body:JSON.stringify({
         fullName,
         username,
