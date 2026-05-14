@@ -40,21 +40,41 @@ async function login(){
     const res = await fetch("/api/login",{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({ username,password })
+      body:JSON.stringify({ username, password })
     });
 
     const data = await res.json();
 
     if(!res.ok){
-      loginError.textContent = data.error || "Connexion impossible";
+      loginError.textContent = data.error || "Identifiants incorrects";
       return;
     }
 
+    const user = data.user || data;
+
     currentUser = {
-  ...data.user,
-  permissions:["all"],
-  active:true
-};
+      id: user.id,
+      fullName: user.fullName || user.full_name || user.fullName || username,
+      username: user.username || username,
+      role: user.role || "admin",
+      active: user.active !== false
+    };
+
+    sessionStorage.setItem("lounch_current_user", JSON.stringify(currentUser));
+
+    loginPage.classList.add("hidden");
+    appPage.classList.remove("hidden");
+
+    renderAll(true);
+
+    if(currentUser.role === "storekeeper") showSection("stock","Stock / bordereaux");
+    if(currentUser.role === "waitress") showSection("myorders","Mes commandes");
+
+  }catch(err){
+    console.error(err);
+    loginError.textContent = "Erreur côté interface. Rechargez la page.";
+  }
+}
 
 renderMenu();
 
