@@ -36,6 +36,8 @@ async function login(){
   const username = loginUsername.value.trim();
   const password = loginPassword.value;
 
+  loginError.textContent = "Connexion en cours...";
+
   try{
     const res = await fetch("/api/login",{
       method:"POST",
@@ -54,7 +56,7 @@ async function login(){
 
     currentUser = {
       id: user.id,
-      fullName: user.fullName || user.full_name || user.fullName || username,
+      fullName: user.fullName || user.full_name || username,
       username: user.username || username,
       role: user.role || "admin",
       active: user.active !== false
@@ -72,11 +74,9 @@ async function login(){
 
   }catch(err){
     console.error(err);
-    loginError.textContent = "Erreur côté interface. Rechargez la page.";
+    loginError.textContent = "Erreur serveur ou interface";
   }
 }
-
-renderMenu();
 
 sessionStorage.setItem(
   "lounch_current_user",
