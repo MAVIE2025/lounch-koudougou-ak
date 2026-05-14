@@ -483,6 +483,52 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    const result = await query(
+      `SELECT * FROM users 
+       WHERE username=$1 
+       AND active=true 
+       LIMIT 1`,
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        error: "Utilisateur introuvable"
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (user.plain_password !== password) {
+      return res.status(401).json({
+        error: "Mot de passe incorrect"
+      });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        username: user.username,
+        role: user.role,
+        active: user.active
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: "Erreur serveur"
+    });
+  }
+});
+
 initDb().then(() => {
   app.listen(PORT, () => console.log(`LOUNCH KOUDOUGOU AK running on port ${PORT}`));
 }).catch(err => {
