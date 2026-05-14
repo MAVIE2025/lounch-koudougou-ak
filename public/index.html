@@ -221,6 +221,7 @@ async function renderUsers(){
   <button class="small" onclick="editUser('${u.id}')">Modifier</button>
   <button class="small warning" onclick="resetPassword('${u.id}')">Mot de passe</button>
   <button class="small danger" onclick="toggleUser('${u.id}')">${u.active ? "Désactiver" : "Activer"}</button>
+  <button class="small danger" onclick="deleteUser('${u.id}')">Supprimer</button>
 </td>
           </tr>
         `).join("")}
@@ -231,6 +232,25 @@ async function renderUsers(){
     console.error(err);
     usersTable.innerHTML = `<p class="muted">Erreur chargement utilisateurs</p>`;
   }
+}
+async function deleteUser(id){
+  if(!confirm("Supprimer définitivement ce compte ?")) return;
+
+  const res = await fetch("/api/users/" + id,{
+    method:"DELETE",
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  });
+
+  const data = await res.json();
+
+  if(!res.ok){
+    return alert(data.error || "Erreur suppression utilisateur");
+  }
+
+  alert("Compte supprimé");
+  await refresh();
 }
 function fileToDataUrl(file){return new Promise(res=>{if(!file)return res('');const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file)})}
 async function saveProduct(){if(!requireRoles(['admin','storekeeper']))return alert('Accès refusé');const name=productName.value.trim(),category=productCategory.value.trim(),price=Number(productPrice.value),qty=Number(productQty.value),alertQty=Number(productAlert.value);if(!name||!category||price<0||qty<0||alertQty<0)return alert('Vérifie les champs du stock.');const data=load();const photo=await fileToDataUrl(deliveryPhoto.files[0]);if(editingProductId){const p=data.products.find(x=>x.id===editingProductId);if(!p)return;const before=p.qty;if(currentUser.role!=='admin'&&(Number(price)!==Number(p.price)||Number(alertQty)!==Number(p.alert)))return alert('Seul Admin peut modifier le prix ou le seuil d’alerte.');const finalPrice=currentUser.role==='admin'?price:p.price;const finalAlert=currentUser.role==='admin'?alertQty:p.alert;Object.assign(p,{name,category,price:finalPrice,qty,alert:finalAlert,deliveryPhoto:photo||p.deliveryPhoto,updatedAt:nowISO(),updatedBy:currentUser.fullName});data.stockHistory.unshift({id:uid('stk'),at:nowISO(),user:currentUser.fullName,item:name,before,after:qty,diff:qty-before,type:'Modification'});logAction('Modification stock',`${name} / avant ${before} / après ${qty}`)}else{const existing=data.products.find(p=>p.name.trim().toLowerCase()===name.toLowerCase());if(existing){if(currentUser.role!=='admin'&&(Number(price)!==Number(existing.price)||Number(alertQty)!==Number(existing.alert)))return alert('Seul Admin peut modifier le prix ou le seuil d’alerte.');const before=Number(existing.qty)||0;const after=before+qty;Object.assign(existing,{category,price:currentUser.role==='admin'?price:existing.price,qty:after,alert:currentUser.role==='admin'?alertQty:existing.alert,deliveryPhoto:photo||existing.deliveryPhoto,updatedAt:nowISO(),updatedBy:currentUser.fullName});data.stockHistory.unshift({id:uid('stk'),at:nowISO(),user:currentUser.fullName,item:existing.name,before,after,diff:qty,type:'Réapprovisionnement'});logAction('Réapprovisionnement stock',`${existing.name} / ajout ${qty} / avant ${before} / après ${after}`)}else{data.products.push({id:uid('prd'),name,category,price,qty,alert:alertQty,deliveryPhoto:photo,createdAt:nowISO(),createdBy:currentUser.fullName});data.stockHistory.unshift({id:uid('stk'),at:nowISO(),user:currentUser.fullName,item:name,before:0,after:qty,diff:qty,type:'Création'});logAction('Création item stock',`${name} / quantité ${qty}`)}}save(data);editingProductId=null;productName.value=productCategory.value=productPrice.value=productQty.value=productAlert.value='';deliveryPhoto.value='';renderAll(false)}

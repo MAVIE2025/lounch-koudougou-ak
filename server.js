@@ -291,6 +291,33 @@ app.patch("/api/users/:id/toggle", authMiddleware, async (req, res) => {
   }
 });
 
+app.delete("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    if (String(req.user.id) === String(req.params.id)) {
+      return res.status(400).json({ error: "Impossible de supprimer votre propre compte" });
+    }
+
+    const result = await query(
+      "DELETE FROM users WHERE id=$1 RETURNING id, full_name, username",
+      [req.params.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Utilisateur introuvable" });
+    }
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "LOUNCH KOUDOUGOU AK" }));
 
 app.post("/api/login", async (req, res) => {
