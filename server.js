@@ -234,12 +234,54 @@ async function authMiddleware(req, res, next) {
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "LOUNCH KOUDOUGOU AK" }));
 
 app.post("/api/login", async (req, res) => {
-  const { username, password } = req.body;
-  const token = jwt.sign(
-  { id: user.id, username: user.username, role: user.role },
-  process.env.JWT_SECRET || "ak-koudougou-secret-2026",
-  { expiresIn: "12h" }
-);
+  try {
+    const { username, password } = req.body;
+
+    const result = await query(
+      `SELECT * FROM users 
+       WHERE username=$1 
+       AND active=true 
+       LIMIT 1`,
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Utilisateur introuvable" });
+    }
+
+    const user = result.rows[0];
+
+    const passwordOk =
+      user.plain_password === password ||
+      await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordOk) {
+      return res.status(401).json({ error: "Mot de passe incorrect" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      process.env.JWT_SECRET || "ak-koudougou-secret-2026",
+      { expiresIn: "12h" }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user.id,
+        fullName: user.full_name,
+        username: user.username,
+        role: user.role,
+        active: user.active
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 
 res.json({
   success: true,
