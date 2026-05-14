@@ -253,7 +253,53 @@ async function deleteUser(id){
   await refresh();
 }
 function fileToDataUrl(file){return new Promise(res=>{if(!file)return res('');const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file)})}
-async function saveProduct(){if(!requireRoles(['admin','storekeeper']))return alert('Accès refusé');const name=productName.value.trim(),category=productCategory.value.trim(),price=Number(productPrice.value),qty=Number(productQty.value),alertQty=Number(productAlert.value);if(!name||!category||price<0||qty<0||alertQty<0)return alert('Vérifie les champs du stock.');const data=load();const photo=await fileToDataUrl(deliveryPhoto.files[0]);if(editingProductId){const p=data.products.find(x=>x.id===editingProductId);if(!p)return;const before=p.qty;if(currentUser.role!=='admin'&&(Number(price)!==Number(p.price)||Number(alertQty)!==Number(p.alert)))return alert('Seul Admin peut modifier le prix ou le seuil d’alerte.');const finalPrice=currentUser.role==='admin'?price:p.price;const finalAlert=currentUser.role==='admin'?alertQty:p.alert;Object.assign(p,{name,category,price:finalPrice,qty,alert:finalAlert,deliveryPhoto:photo||p.deliveryPhoto,updatedAt:nowISO(),updatedBy:currentUser.fullName});data.stockHistory.unshift({id:uid('stk'),at:nowISO(),user:currentUser.fullName,item:name,before,after:qty,diff:qty-before,type:'Modification'});logAction('Modification stock',`${name} / avant ${before} / après ${qty}`)}else{const existing=data.products.find(p=>p.name.trim().toLowerCase()===name.toLowerCase());if(existing){if(currentUser.role!=='admin'&&(Number(price)!==Number(existing.price)||Number(alertQty)!==Number(existing.alert)))return alert('Seul Admin peut modifier le prix ou le seuil d’alerte.');const before=Number(existing.qty)||0;const after=before+qty;Object.assign(existing,{category,price:currentUser.role==='admin'?price:existing.price,qty:after,alert:currentUser.role==='admin'?alertQty:existing.alert,deliveryPhoto:photo||existing.deliveryPhoto,updatedAt:nowISO(),updatedBy:currentUser.fullName});data.stockHistory.unshift({id:uid('stk'),at:nowISO(),user:currentUser.fullName,item:existing.name,before,after,diff:qty,type:'Réapprovisionnement'});logAction('Réapprovisionnement stock',`${existing.name} / ajout ${qty} / avant ${before} / après ${after}`)}else{data.products.push({id:uid('prd'),name,category,price,qty,alert:alertQty,deliveryPhoto:photo,createdAt:nowISO(),createdBy:currentUser.fullName});data.stockHistory.unshift({id:uid('stk'),at:nowISO(),user:currentUser.fullName,item:name,before:0,after:qty,diff:qty,type:'Création'});logAction('Création item stock',`${name} / quantité ${qty}`)}}save(data);editingProductId=null;productName.value=productCategory.value=productPrice.value=productQty.value=productAlert.value='';deliveryPhoto.value='';renderAll(false)}
+async function saveProduct(){
+  if(!requireRoles(["admin","storekeeper"])) return alert("Accès refusé");
+
+  const name = productName.value.trim();
+  const category = productCategory.value.trim();
+  const price = Number(productPrice.value);
+  const qty = Number(productQty.value);
+  const alertQty = Number(productAlert.value);
+
+  if(!name || !category || price < 0 || qty < 0 || alertQty < 0){
+    return alert("Vérifie les champs du stock.");
+  }
+
+  const deliveryPhotoData = await fileToDataUrl(deliveryPhoto.files[0]);
+
+  const res = await fetch("/api/products",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    },
+    body:JSON.stringify({
+      name,
+      category,
+      price,
+      qty,
+      alertQty,
+      deliveryPhoto: deliveryPhotoData || null
+    })
+  });
+
+  const data = await res.json();
+
+  if(!res.ok){
+    return alert(data.error || "Erreur enregistrement stock");
+  }
+
+  productName.value = "";
+  productCategory.value = "";
+  productPrice.value = "";
+  productQty.value = "";
+  productAlert.value = "";
+  deliveryPhoto.value = "";
+
+  alert("Stock enregistré");
+  await refresh();
+}
 function editProduct(id){const p=load().products.find(x=>x.id===id);if(!p)return;editingProductId=id;productName.value=p.name;productCategory.value=p.category;productPrice.value=p.price;productQty.value=p.qty;productAlert.value=p.alert;showSection('stock','Stock / bordereaux')}
 function prefillExistingProduct(){
  const name=productName.value.trim().toLowerCase();
@@ -266,7 +312,76 @@ function prefillExistingProduct(){
  }
 }
 function deleteProduct(id){if(!requireRoles(['admin']))return alert('Seul admin peut supprimer un item.');if(!confirm('Supprimer cet item ?'))return;const data=load();const p=data.products.find(x=>x.id===id);data.products=data.products.filter(x=>x.id!==id);save(data);logAction('Suppression item stock',p?p.name:id);renderAll(false)}
-function renderStock(){const data=load();const categoryList=document.getElementById('categoryList');const productList=document.getElementById('productList');if(categoryList){const cats=[...new Set(data.products.map(p=>(p.category||'').trim()).filter(Boolean))].sort();categoryList.innerHTML=cats.map(c=>`<option value="${c}"></option>`).join('')}if(productList){const names=[...new Set(data.products.map(p=>(p.name||'').trim()).filter(Boolean))].sort();productList.innerHTML=names.map(n=>`<option value="${n}"></option>`).join('')}const q=(stockSearch&&stockSearch.value||'').toLowerCase();const list=data.products.filter(p=>!q||p.name.toLowerCase().includes(q)||p.category.toLowerCase().includes(q));stockTable.innerHTML=list.length?`<table><tr><th>Item</th><th>Catégorie</th><th>Prix</th><th>Qté</th><th>Seuil</th><th>Bordereau</th><th>Créé par</th><th>Actions</th></tr>${list.map(p=>`<tr><td>${p.name}</td><td>${p.category}</td><td>${money(p.price)}</td><td><span class="badge ${Number(p.qty)<=Number(p.alert)?'danger':'ok'}">${p.qty}</span></td><td>${p.alert}</td><td>${p.deliveryPhoto?`<img src="${p.deliveryPhoto}" class="delivery-photo">`:'-'}</td><td>${p.createdBy||''}</td><td class="actions"><button class="small" onclick="editProduct('${p.id}')">Modifier</button>${currentUser.role==='admin'?`<button class="small danger" onclick="deleteProduct('${p.id}')">Supprimer</button>`:''}</td></tr>`).join('')}</table>`:'<p class="muted">Aucun item.</p>';const sh=limitedRows('stock_history',data.stockHistory,(h)=>`<tr><td>${new Date(h.at).toLocaleString('fr-FR')}</td><td>${h.item}</td><td>${h.before}</td><td>${h.after}</td><td>${h.diff}</td><td>${h.type}</td><td>${h.user}</td></tr>`,20);stockHistoryTable.innerHTML=data.stockHistory.length?`<table><tr><th>Date</th><th>Item</th><th>Avant</th><th>Après</th><th>Différence</th><th>Type</th><th>Utilisateur</th></tr>${sh.body}</table>${sh.btn}`:'<p class="muted">Aucun historique stock.</p>'}
+async function renderStock(){
+  const token = sessionStorage.getItem("lounch_token");
+
+  const [productsRes, historyRes] = await Promise.all([
+    fetch("/api/products"),
+    fetch("/api/stock-history")
+  ]);
+
+  const products = await productsRes.json();
+  const history = await historyRes.json();
+
+  const categoryList = document.getElementById("categoryList");
+  const productList = document.getElementById("productList");
+
+  if(categoryList){
+    const cats = [...new Set(products.map(p=>(p.category||"").trim()).filter(Boolean))].sort();
+    categoryList.innerHTML = cats.map(c=>`<option value="${c}"></option>`).join("");
+  }
+
+  if(productList){
+    const names = [...new Set(products.map(p=>(p.name||"").trim()).filter(Boolean))].sort();
+    productList.innerHTML = names.map(n=>`<option value="${n}"></option>`).join("");
+  }
+
+  const q = (stockSearch && stockSearch.value || "").toLowerCase();
+
+  const list = products.filter(p =>
+    !q ||
+    String(p.name).toLowerCase().includes(q) ||
+    String(p.category).toLowerCase().includes(q)
+  );
+
+  stockTable.innerHTML = list.length ? `
+    <table>
+      <tr>
+        <th>Item</th><th>Catégorie</th><th>Prix</th><th>Qté</th><th>Seuil</th><th>Bordereau</th><th>Créé par</th>
+      </tr>
+      ${list.map(p=>`
+        <tr>
+          <td>${p.name}</td>
+          <td>${p.category}</td>
+          <td>${money(p.price)}</td>
+          <td><span class="badge ${Number(p.qty)<=Number(p.alert_qty)?'danger':'ok'}">${p.qty}</span></td>
+          <td>${p.alert_qty}</td>
+          <td>${p.delivery_photo ? `<img src="${p.delivery_photo}" class="delivery-photo">` : "-"}</td>
+          <td>${p.created_by || ""}</td>
+        </tr>
+      `).join("")}
+    </table>
+  ` : `<p class="muted">Aucun item.</p>`;
+
+  const rows = limitedRows("stock_history", history, h=>`
+    <tr>
+      <td>${new Date(h.created_at).toLocaleString("fr-FR")}</td>
+      <td>${h.product_name}</td>
+      <td>${h.before_qty}</td>
+      <td>${h.after_qty}</td>
+      <td>${h.diff_qty}</td>
+      <td>${h.action_type}</td>
+      <td>${h.user_name}</td>
+    </tr>
+  `,20);
+
+  stockHistoryTable.innerHTML = history.length ? `
+    <table>
+      <tr><th>Date</th><th>Item</th><th>Avant</th><th>Après</th><th>Différence</th><th>Type</th><th>Utilisateur</th></tr>
+      ${rows.body}
+    </table>${rows.btn}
+  ` : `<p class="muted">Aucun historique stock.</p>`;
+}
 function addTable(){const name=tableName.value.trim();if(!name)return;const data=load();if(data.tables.includes(name))return alert('Cette table existe déjà.');data.tables.push(name);save(data);logAction('Création table',name);tableName.value='';renderAll(false)}function renderTables(){const data=load();orderTable.innerHTML=data.tables.map(t=>`<option value="${t}">${t}</option>`).join('');tablesTable.innerHTML=`<table><tr><th>Table</th><th>Factures non payées</th><th>Action</th></tr>${data.tables.map(t=>`<tr><td>${t}</td><td>${data.invoices.filter(i=>i.tableName===t&&i.status==='unpaid').length}</td><td>${currentUser.role==='admin'?`<button class="small danger" onclick="deleteTable('${t}')">Supprimer</button>`:''}</td></tr>`).join('')}</table>`}function deleteTable(t){const data=load();if(data.invoices.some(i=>i.tableName===t&&i.status==='unpaid'))return alert('Impossible : facture non payée sur cette table.');data.tables=data.tables.filter(x=>x!==t);save(data);logAction('Suppression table',t);renderAll(false)}
 function renderWaitressOptions(){const data=load();orderWaitress.innerHTML=data.users.filter(u=>u.role==='waitress'&&u.active!==false).map(u=>`<option value="${u.id}">${u.fullName}</option>`).join('')}function addCartLine(){cart.push({productId:'',qty:1});renderCart()}function removeCartLine(i){cart.splice(i,1);renderCart()}function lineTotal(l){const p=load().products.find(x=>x.id===l.productId);return p?Number(p.price)*Number(l.qty||0):0}
 function renderCart(){const data=load();if(cart.length===0)addCartLine();cartLines.innerHTML=cart.map((line,i)=>`<div class="cart-line"><div><label>Produit</label><select onchange="cart[${i}].productId=this.value;renderCart()"><option value="">Choisir...</option>${data.products.map(p=>`<option value="${p.id}" ${line.productId===p.id?'selected':''}>${p.name} — stock ${p.qty} — ${money(p.price)}</option>`).join('')}</select></div><div><label>Qté</label><input type="number" min="1" value="${line.qty}" onchange="cart[${i}].qty=Number(this.value);renderCart()"></div><div><label>Total</label><input disabled value="${money(lineTotal(line))}"></div><button class="small danger" onclick="removeCartLine(${i})">X</button></div>`).join('');cartTotal.textContent=money(cart.reduce((s,l)=>s+lineTotal(l),0))}

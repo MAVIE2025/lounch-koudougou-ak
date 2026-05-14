@@ -443,17 +443,21 @@ app.get("/api/products", async (req, res) => {
   res.json(r.rows);
 });
 
-app.post("/api/products", async (req, res) => {
-  const user = await getCurrentUser(req);
-  if (!requireRole(user, ["admin", "storekeeper"])) return res.status(403).json({ error: "Accès refusé" });
+app.post("/api/products", authMiddleware, async (req, res) => {
+  const user = req.user;
+
+  if (!requireRole(user, ["admin", "storekeeper"])) {
+    return res.status(403).json({ error: "Accès refusé" });
+  }
 
   const { name, category, price, qty, alertQty, deliveryPhoto } = req.body;
+
   const existing = await query("SELECT * FROM products WHERE LOWER(name)=LOWER($1)", [name]);
 
   if (existing.rowCount > 0) {
     const p = existing.rows[0];
 
-    if (normalizeRole(user.role) !== "admin" && (Number(price) !== Number(p.price) || Number(alertQty) !== Number(p.alert_qty))) {
+    if (user.role !== "admin" && (Number(price) !== Number(p.price) || Number(alertQty) !== Number(p.alert_qty))) {
       return res.status(403).json({ error: "Seul Admin peut modifier prix ou seuil" });
     }
 
@@ -461,9 +465,18 @@ app.post("/api/products", async (req, res) => {
     const after = before + Number(qty);
 
     const r = await query(
-      `UPDATE products SET category=$1, price=$2, qty=$3, alert_qty=$4, delivery_photo=COALESCE($5, delivery_photo), updated_by=$6, updated_at=NOW()
+      `UPDATE products 
+       SET category=$1, price=$2, qty=$3, alert_qty=$4, delivery_photo=COALESCE($5, delivery_photo), updated_by=$6, updated_at=NOW()
        WHERE id=$7 RETURNING *`,
-      [category, requireRole(user, ["admin"]) ? price : p.price, after, requireRole(user, ["admin"]) ? alertQty : p.alert_qty, deliveryPhoto || null, user.full_name, p.id]
+      [
+        category,
+        user.role === "admin" ? price : p.price,
+        after,
+        user.role === "admin" ? alertQty : p.alert_qty,
+        deliveryPhoto || null,
+        user.full_name,
+        p.id
+      ]
     );
 
     await query(
@@ -471,7 +484,6 @@ app.post("/api/products", async (req, res) => {
       [p.name, before, after, Number(qty), "Réapprovisionnement", user.full_name]
     );
 
-    await addLog(user, "Réapprovisionnement stock", `${p.name} +${qty}`);
     return res.json(r.rows[0]);
   }
 
@@ -485,7 +497,6 @@ app.post("/api/products", async (req, res) => {
     [name, 0, qty, qty, "Création", user.full_name]
   );
 
-  await addLog(user, "Création item stock", `${name} / quantité ${qty}`);
   res.json(r.rows[0]);
 });
 
