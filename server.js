@@ -529,10 +529,8 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
-app.post("/api/users", async (req,res)=>{
-
-  try{
-
+app.post("/api/users", async (req, res) => {
+  try {
     const { fullName, username, password, role } = req.body;
 
     const existing = await query(
@@ -540,32 +538,29 @@ app.post("/api/users", async (req,res)=>{
       [username]
     );
 
-    if(existing.rows.length){
+    if (existing.rows.length) {
       return res.status(400).json({
-        error:"Nom utilisateur déjà utilisé"
+        error: "Nom utilisateur déjà utilisé"
       });
     }
 
+    const passwordHash = await bcrypt.hash(password, 10);
+
     await query(
       `INSERT INTO users
-      (full_name,username,plain_password,role,active)
-      VALUES($1,$2,$3,$4,true)`,
-      [fullName,username,password,role]
+      (full_name, username, password_hash, plain_password, role, active)
+      VALUES($1, $2, $3, $4, $5, true)`,
+      [fullName, username, passwordHash, password, role]
     );
 
-    res.json({
-      success:true
-    });
+    res.json({ success: true });
 
-  }catch(err){
-
+  } catch (err) {
     console.error(err);
-
     res.status(500).json({
-      error:"Erreur serveur"
+      error: "Erreur serveur"
     });
   }
-
 });
 
 initDb().then(() => {
