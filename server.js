@@ -220,6 +220,77 @@ async function initDb() {
   }
 }
 
+app.put("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const { fullName, username, password, role, active } = req.body;
+
+    const existing = await query(
+      "SELECT id FROM users WHERE username=$1 AND id<>$2 LIMIT 1",
+      [username, req.params.id]
+    );
+
+    if (existing.rows.length) {
+      return res.status(400).json({ error: "Nom utilisateur déjà utilisé" });
+    }
+
+    let sql;
+    let params;
+
+    if (password && password.trim()) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      sql = `
+        UPDATE users 
+        SET full_name=$1, username=$2, password_hash=$3, plain_password=$4, role=$5, active=$6
+        WHERE id=$7
+        RETURNING id, full_name, username, plain_password, role, active
+      `;
+      params = [fullName, username, passwordHash, password, role, active, req.params.id];
+    } else {
+      sql = `
+        UPDATE users 
+        SET full_name=$1, username=$2, role=$3, active=$4
+        WHERE id=$5
+        RETURNING id, full_name, username, plain_password, role, active
+      `;
+      params = [fullName, username, role, active, req.params.id];
+    }
+
+    const result = await query(sql, params);
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.patch("/api/users/:id/toggle", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const result = await query(
+      `UPDATE users 
+       SET active = NOT active 
+       WHERE id=$1 
+       RETURNING id, full_name, username, plain_password, role, active`,
+      [req.params.id]
+    );
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "LOUNCH KOUDOUGOU AK" }));
 
 app.post("/api/login", async (req, res) => {
