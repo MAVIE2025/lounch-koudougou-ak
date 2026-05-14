@@ -212,6 +212,20 @@ app.get("/api/users", async (req, res) => {
   res.json(r.rows);
 });
 
+function requireRole(user, roles) {
+  if (!user) return false;
+
+  const role = String(user.role || "")
+    .toLowerCase()
+    .trim();
+
+  if (role.includes("admin") || role.includes("super")) {
+    return true;
+  }
+
+  return roles.includes(role);
+}
+
 app.post("/api/users", async (req, res) => {
   const user = await getUserFromHeader(req);
   if (!requireRole(user, ["admin"])) return res.status(403).json({ error: "Accès refusé" });
