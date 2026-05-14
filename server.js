@@ -172,8 +172,24 @@ async function getUserFromHeader(req) {
   return r.rows[0] || null;
 }
 
-function requireRole(user, roles) {
-  return user && user.active !== false && roles.includes(user.role);
+function requireRoles(roles){
+
+  if(!currentUser){
+    return false;
+  }
+
+  const role = String(currentUser.role || "")
+    .toLowerCase()
+    .trim();
+
+  if(
+    role.includes("admin") ||
+    role.includes("super")
+  ){
+    return true;
+  }
+
+  return roles.includes(role);
 }
 
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "LOUNCH KOUDOUGOU AK" }));
