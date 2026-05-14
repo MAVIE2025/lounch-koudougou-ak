@@ -91,7 +91,55 @@ function toggleShowAll(key){
  renderAll(false);
 }
 function renderDashboard(){const data=load();recentLogsCard.style.display=currentUser.role==='admin'?'block':'none';const paid=data.invoices.filter(i=>i.status==='paid');const dayTotal=paid.filter(i=>i.paidAt&&i.paidAt.slice(0,10)===today()).reduce((s,i)=>s+i.total,0);const monthTotal=paid.filter(i=>i.paidAt&&i.paidAt.slice(0,7)===month()).reduce((s,i)=>s+i.total,0);const low=data.products.filter(p=>Number(p.qty)<=Number(p.alert));kpiDay.textContent=money(dayTotal);kpiMonth.textContent=money(monthTotal);kpiUnpaid.textContent=data.invoices.filter(i=>i.status==='unpaid').length;kpiLowStock.textContent=low.length;stockAlerts.innerHTML=low.length?'<div class="alert"><b>Alerte stock :</b> '+low.map(p=>p.name+' ('+p.qty+')').join(', ')+'</div>':'';const waitresses=data.users.filter(u=>u.role==='waitress');waitressStats.innerHTML=waitresses.length?`<table><tr><th>Serveuse</th><th>Recette jour</th><th>Recette mois</th></tr>${waitresses.map(w=>{const d=paid.filter(i=>i.waitressId===w.id&&i.paidAt&&i.paidAt.slice(0,10)===today()).reduce((s,i)=>s+i.total,0);const m=paid.filter(i=>i.waitressId===w.id&&i.paidAt&&i.paidAt.slice(0,7)===month()).reduce((s,i)=>s+i.total,0);return `<tr><td>${w.fullName}</td><td>${money(d)}</td><td>${money(m)}</td></tr>`}).join('')}</table>`:'<p class="muted">Aucune serveuse.</p>';const rlog=limitedRows('recent_logs',data.logs,(l)=>`<div class="log-item"><b>${l.action}</b><br><span class="muted">${new Date(l.at).toLocaleString('fr-FR')} — ${l.user}</span><br>${l.details||''}</div>`,20);recentLogs.innerHTML=rlog.body?rlog.body+rlog.btn:'<p class="muted">Aucun log.</p>';const sales={};paid.forEach(inv=>inv.items.forEach(x=>sales[x.name]=(sales[x.name]||0)+Number(x.qty)));const top=Object.entries(sales).sort((a,b)=>b[1]-a[1]).slice(0,10);topProducts.innerHTML=top.length?`<table><tr><th>Produit</th><th>Quantité vendue</th></tr>${top.map(x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`).join('')}</table>`:'<p class="muted">Aucune vente.</p>'}
-function saveUser(){if(!requireRoles(['admin']))return alert('Accès refusé');const data=load();const id=editingUserId.value;const fullName=userFullName.value.trim(),username=userName.value.trim(),password=userPassword.value.trim(),role=userRole.value;if(!fullName||!username||!password)return alert('Remplis tous les champs.');if(data.users.some(u=>u.username===username&&u.id!==id))return alert('Nom utilisateur déjà utilisé.');if(id){const u=data.users.find(x=>x.id===id);if(!u)return alert('Utilisateur introuvable.');const old=`${u.fullName} / ${u.username} / ${roleLabel(u.role)}`;Object.assign(u,{fullName,username,password,role,updatedAt:nowISO(),updatedBy:currentUser.fullName});save(data);logAction('Modification utilisateur',`${old} → ${fullName} / ${username} / ${roleLabel(role)}`);if(currentUser.id===id){currentUser=u;sessionStorage.setItem('lounch_current_user',JSON.stringify(u));}}else{data.users.push({id:uid('usr'),fullName,username,password,role,active:true,createdAt:nowISO()});save(data);logAction('Création utilisateur',`${fullName} (${roleLabel(role)})`);}resetUserForm();renderAll(false)}
+async function saveUser(){
+
+  if(!requireRoles(['admin'])){
+    return alert('Accès refusé');
+  }
+
+  const fullName = userFullName.value.trim();
+  const username = userName.value.trim();
+  const password = userPassword.value.trim();
+  const role = userRole.value;
+
+  if(!fullName || !username || !password){
+    return alert('Remplis tous les champs.');
+  }
+
+  try{
+
+    const res = await fetch("/api/users",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json"
+      },
+      body:JSON.stringify({
+        fullName,
+        username,
+        password,
+        role
+      })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      return alert(data.error || "Erreur création utilisateur");
+    }
+
+    alert("Utilisateur créé avec succès");
+
+    resetUserForm();
+
+    await refresh();
+
+  }catch(err){
+
+    console.error(err);
+
+    alert("Erreur serveur");
+  }
+}
 function resetUserForm(){editingUserId.value='';userFormTitle.textContent='Créer un utilisateur';userFullName.value=userName.value=userPassword.value='';userRole.value='admin'}
 function editUser(id){const u=load().users.find(x=>x.id===id);if(!u)return;editingUserId.value=u.id;userFormTitle.textContent='Modifier utilisateur';userFullName.value=u.fullName;userName.value=u.username;userPassword.value=u.password;userRole.value=u.role;showSection('users','Utilisateurs')}
 function resetPassword(id){const data=load();const u=data.users.find(x=>x.id===id);if(!u)return;const p=prompt('Nouveau mot de passe pour '+u.fullName);if(!p||p.trim().length<3)return alert('Mot de passe trop court ou annulé.');u.password=p.trim();u.updatedAt=nowISO();u.updatedBy=currentUser.fullName;save(data);logAction('Réinitialisation mot de passe',u.fullName);renderAll(false)}

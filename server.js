@@ -529,6 +529,45 @@ app.post("/api/login", async (req, res) => {
   }
 });
 
+app.post("/api/users", async (req,res)=>{
+
+  try{
+
+    const { fullName, username, password, role } = req.body;
+
+    const existing = await query(
+      "SELECT id FROM users WHERE username=$1 LIMIT 1",
+      [username]
+    );
+
+    if(existing.rows.length){
+      return res.status(400).json({
+        error:"Nom utilisateur déjà utilisé"
+      });
+    }
+
+    await query(
+      `INSERT INTO users
+      (full_name,username,plain_password,role,active)
+      VALUES($1,$2,$3,$4,true)`,
+      [fullName,username,password,role]
+    );
+
+    res.json({
+      success:true
+    });
+
+  }catch(err){
+
+    console.error(err);
+
+    res.status(500).json({
+      error:"Erreur serveur"
+    });
+  }
+
+});
+
 initDb().then(() => {
   app.listen(PORT, () => console.log(`LOUNCH KOUDOUGOU AK running on port ${PORT}`));
 }).catch(err => {
