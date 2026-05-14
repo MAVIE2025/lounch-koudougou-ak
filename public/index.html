@@ -77,35 +77,6 @@ async function login(){
     loginError.textContent = "Erreur serveur ou interface";
   }
 }
-
-sessionStorage.setItem(
-  "lounch_current_user",
-  JSON.stringify(currentUser)
-);
-
-    sessionStorage.setItem(
-      "lounch_current_user",
-      JSON.stringify(currentUser)
-    );
-
-    loginPage.classList.add("hidden");
-    appPage.classList.remove("hidden");
-
-    renderAll();
-
-    if(currentUser.role==="storekeeper"){
-      showSection("stock","Stock / bordereaux");
-    }
-
-    if(currentUser.role==="waitress"){
-      showSection("myorders","Mes commandes");
-    }
-
-  }catch(err){
-    loginError.textContent = "Erreur serveur";
-    console.error(err);
-  }
-}
 function logout(){logAction('Déconnexion','Sortie du logiciel');sessionStorage.removeItem('lounch_current_user');location.reload()}function initSession(){const s=sessionStorage.getItem('lounch_current_user');if(s){currentUser=JSON.parse(s);loginPage.classList.add('hidden');appPage.classList.remove('hidden');renderAll();if(currentUser.role==='storekeeper')showSection('stock','Stock / bordereaux');if(currentUser.role==='waitress')showSection('myorders','Mes commandes')}}
 function buildMenu(){const items=[['dashboard','Tableau de bord',['admin','cashier']],['users','Utilisateurs',['admin']],['stock','Stock / bordereaux',['admin','storekeeper']],['orders','Nouvelle commande',['admin','cashier']],['tables','Tables',['admin','cashier']],['unpaid','Factures non payées',['admin','cashier']],['paid','Factures payées',['admin','cashier']],['closing','Clôture caisse',['admin','cashier']],['backup','Sauvegarde',['admin','cashier']],['myorders','Mes commandes',['waitress']],['logs','Logs actions',['admin']]];menu.innerHTML='';items.filter(i=>i[2].includes(currentUser.role)).forEach(i=>{const b=document.createElement('button');b.textContent=i[1];b.onclick=()=>showSection(i[0],i[1]);b.id='btn_'+i[0];menu.appendChild(b)})}
 function showSection(id,title){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));const btn=document.getElementById('btn_'+id);if(btn)btn.classList.add('active');pageTitle.textContent=title;renderAll(false)}function renderAll(rebuildMenu=true){if(!currentUser)return;currentUserInfo.textContent=currentUser.fullName+' — '+roleLabel(currentUser.role);todayText.textContent=new Date().toLocaleString('fr-FR');if(rebuildMenu)buildMenu();renderDashboard();renderUsers();renderStock();renderTables();renderWaitressOptions();renderCart();renderInvoices();renderLogs();renderMyOrders();renderClosings()}
