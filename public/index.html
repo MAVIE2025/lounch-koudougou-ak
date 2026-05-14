@@ -50,7 +50,18 @@ async function login(){
       return;
     }
 
-    currentUser = data.user;
+    currentUser = {
+  ...data.user,
+  permissions:["all"],
+  active:true
+};
+
+renderMenu();
+
+sessionStorage.setItem(
+  "lounch_current_user",
+  JSON.stringify(currentUser)
+);
 
     sessionStorage.setItem(
       "lounch_current_user",
