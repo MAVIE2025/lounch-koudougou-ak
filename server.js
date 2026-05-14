@@ -274,12 +274,22 @@ app.post("/api/login", async (req, res) => {
 });
 
 app.get("/api/users", authMiddleware, async (req, res) => {
-  if (!requireRole(req.user, ["admin"])) return res.status(403).json({ error: "Accès refusé" });
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
 
-  const r = await query(
-    "SELECT id, full_name, username, plain_password, role, active, created_at FROM users ORDER BY id DESC"
-  );
-  res.json(r.rows);
+    const result = await query(
+      `SELECT id, full_name, username, plain_password, role, active, created_at
+       FROM users
+       ORDER BY id DESC`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
 });
 
 app.post("/api/users", authMiddleware, async (req, res) => {
