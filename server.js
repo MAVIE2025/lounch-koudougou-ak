@@ -79,6 +79,27 @@ async function getUserFromHeader(req) {
 
 async function getCurrentUser(req) {
   if (req.user) return req.user;
+
+  const header = req.headers.authorization || "";
+  const token = header.replace("Bearer ", "").trim();
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+
+      const result = await query(
+        "SELECT id, full_name, username, role, active FROM users WHERE id=$1 AND active=true LIMIT 1",
+        [decoded.id]
+      );
+
+      if (result.rows.length) {
+        return result.rows[0];
+      }
+    } catch (err) {
+      return null;
+    }
+  }
+
   return await getUserFromHeader(req);
 }
 
