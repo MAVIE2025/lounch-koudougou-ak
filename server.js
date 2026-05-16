@@ -318,6 +318,125 @@ app.delete("/api/users/:id", authMiddleware, async (req, res) => {
   }
 });
 
+app.get("/api/my-orders", authMiddleware, async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT *
+       FROM invoices
+       WHERE waitress_id=$1
+       ORDER BY id DESC
+       LIMIT 200`,
+      [req.user.id]
+    );
+
+    res.json(result.rows);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.put("/api/products/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin", "storekeeper"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const { name, category, price, qty, alertQty, deliveryPhoto } = req.body;
+
+    const old = await query("SELECT * FROM products WHERE id=$1", [req.params.id]);
+
+    if (!old.rows.length) {
+      return res.status(404).json({ error: "Produit introuvable" });
+    }
+
+    const before = Number(old.rows[0].qty);
+    const after = Number(qty);
+
+    const result = await query(
+      `UPDATE products
+       SET name=$1, category=$2, price=$3, qty=$4, alert_qty=$5,
+           delivery_photo=COALESCE($6, delivery_photo),
+           updated_by=$7, updated_at=NOW()
+       WHERE id=$8
+       RETURNING *`,
+      [name, category, price, qty, alertQty, deliveryPhoto || null, req.user.full_name, req.params.id]
+    );
+
+    await query(
+      "INSERT INTO stock_history(product_name,before_qty,after_qty,diff_qty,action_type,user_name) VALUES($1,$2,$3,$4,$5,$6)",
+      [name, before, after, after - before, "Modification", req.user.full_name]
+    );
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.delete("/api/products/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Seul Admin peut supprimer un produit" });
+    }
+
+    const result = await query(
+      "DELETE FROM products WHERE id=$1 RETURNING *",
+      [req.params.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Produit introuvable" });
+    }
+
+    await addLog(req.user, "Suppression produit", result.rows[0].name);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.get("/api/backup", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const users = await query("SELECT id, full_name, username, plain_password, role, active, created_at FROM users ORDER BY id ASC");
+    const products = await query("SELECT * FROM products ORDER BY id ASC");
+    const stockHistory = await query("SELECT * FROM stock_history ORDER BY id ASC");
+    const tables = await query("SELECT * FROM tables_bar ORDER BY id ASC");
+    const invoices = await query("SELECT * FROM invoices ORDER BY id ASC");
+    const invoiceItems = await query("SELECT * FROM invoice_items ORDER BY id ASC");
+    const closings = await query("SELECT * FROM cash_closings ORDER BY id ASC");
+    const logs = await query("SELECT * FROM logs ORDER BY id ASC");
+
+    res.json({
+      exportedAt: new Date().toISOString(),
+      users: users.rows,
+      products: products.rows,
+      stockHistory: stockHistory.rows,
+      tables: tables.rows,
+      invoices: invoices.rows,
+      invoiceItems: invoiceItems.rows,
+      closings: closings.rows,
+      logs: logs.rows
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur export sauvegarde" });
+  }
+});
+
+
+
 app.get("/api/health", (req, res) => res.json({ ok: true, app: "LOUNCH KOUDOUGOU AK" }));
 
 app.post("/api/login", async (req, res) => {
@@ -510,17 +629,72 @@ app.get("/api/tables", async (req, res) => {
   res.json(r.rows);
 });
 
-app.post("/api/tables", async (req, res) => {
-  const user = await getCurrentUser(req);
-  if (!requireRole(user, ["admin", "cashier"])) return res.status(403).json({ error: "Accès refusé" });
+app.post("/api/tables", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin", "cashier"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
 
-  const r = await query(
-    "INSERT INTO tables_bar(name) VALUES($1) ON CONFLICT(name) DO UPDATE SET name=EXCLUDED.name RETURNING *",
-    [req.body.name]
-  );
+    const name = String(req.body.name || "").trim();
 
-  await addLog(user, "Création table", req.body.name);
-  res.json(r.rows[0]);
+    if (!name) {
+      return res.status(400).json({ error: "Nom de table obligatoire" });
+    }
+
+    const result = await query(
+      "INSERT INTO tables_bar(name) VALUES($1) ON CONFLICT(name) DO UPDATE SET name=EXCLUDED.name RETURNING *",
+      [name]
+    );
+
+    await addLog(req.user, "Création table", name);
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.delete("/api/tables/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const result = await query(
+      "DELETE FROM tables_bar WHERE id=$1 RETURNING *",
+      [req.params.id]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ error: "Table introuvable" });
+    }
+
+    await addLog(req.user, "Suppression table", result.rows[0].name);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.get("/api/waitresses", async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, full_name, username, role, active 
+       FROM users 
+       WHERE role='waitress' AND active=true
+       ORDER BY full_name ASC`
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
 });
 
 app.get("/api/invoices", async (req, res) => {
