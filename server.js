@@ -887,6 +887,7 @@ app.post("/api/closings", async (req, res) => {
   res.json(r.rows[0]);
 });
 
+
 app.get("/api/closings", async (req, res) => {
   const r = await query("SELECT * FROM cash_closings ORDER BY id DESC LIMIT 200");
   res.json(r.rows);

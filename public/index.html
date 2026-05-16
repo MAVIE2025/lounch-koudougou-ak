@@ -424,9 +424,14 @@ async function renderStock(){
 
   stockTable.innerHTML = list.length ? `
     <table>
-      <tr>
-        <th>Item</th><th>Catégorie</th><th>Prix</th><th>Qté</th><th>Seuil</th><th>Bordereau</th><th>Créé par</th>
-      </tr>
+      <th>Item</th>
+<th>Catégorie</th>
+<th>Prix</th>
+<th>Qté</th>
+<th>Seuil</th>
+<th>Bordereau</th>
+<th>Créé par</th>
+<th>Actions</th>
       ${list.map(p=>`
         <tr>
           <td>${p.name}</td>
@@ -827,6 +832,26 @@ async function closeCash(){
   await refresh();
 }
 
+function addCartLine(){
+  cart.push({
+    productId:"",
+    qty:1
+  });
+
+  renderCart();
+}
+
+function removeCartLine(index){
+  cart.splice(index,1);
+
+  if(cart.length===0){
+    addCartLine();
+    return;
+  }
+
+  renderCart();
+}
+
 async function renderClosings(){
 
   const res = await fetch("/api/closings",{
@@ -932,8 +957,29 @@ async function refresh(){
   renderLogs();
   renderMyOrders();
   renderClosings();
+  lastRefreshAt = Date.now();
 }
+addCartLine();
 initSession();
+let lastRefreshAt = 0;
+
+setInterval(async ()=>{
+
+  if(!currentUser) return;
+
+  try{
+
+    if(Date.now() - lastRefreshAt < 1500){
+      return;
+    }
+
+    await refresh();
+
+  }catch(e){
+    console.log("Auto refresh error");
+  }
+
+},5000);
 </script>
 </body>
 </html>
