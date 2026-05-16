@@ -827,7 +827,14 @@ async function closeCash(){
   await refresh();
 }
 
-  const res = await fetch("/api/closings");
+async function renderClosings(){
+
+  const res = await fetch("/api/closings",{
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  });
+
   const list = await res.json();
 
   const rows = limitedRows("closings", list, c=>`
@@ -853,11 +860,16 @@ async function closeCash(){
         <th>Tickets</th>
         <th>Forcée</th>
       </tr>
+
       ${rows.body}
+
     </table>
+
     ${rows.btn}
+
   ` : `<p class="muted">Aucune clôture.</p>`;
 }
+ 
 async function renderMyOrders(){
   if(!currentUser || currentUser.role !== "waitress") return;
 
