@@ -826,13 +826,7 @@ async function closeCash(){
   alert("Caisse clôturée : " + money(data.total));
   await refresh();
 }
-if(unpaid.length && currentUser.role!=='admin')return alert('Impossible de clôturer : il reste des factures non payées.');
-if(unpaid.length && currentUser.role==='admin'){
-  const ok=confirm('Il reste '+unpaid.length+' facture(s) non payée(s). Voulez-vous forcer la clôture en tant qu’Admin ?');
-  if(!ok)return;
-  logAction('Clôture forcée par Admin','Clôture malgré '+unpaid.length+' facture(s) non payée(s)');
-}const paid=data.invoices.filter(i=>i.status==='paid'&&i.paidAt&&i.paidAt.slice(0,10)===today()&&(currentUser.role==='admin'||i.cashierId===currentUser.id));const cash=paid.filter(i=>i.paymentMode==='Espèces').reduce((s,i)=>s+i.total,0);const electronic=paid.filter(i=>i.paymentMode!=='Espèces').reduce((s,i)=>s+i.total,0);const total=cash+electronic;const c={id:uid('clo'),date:today(),at:nowISO(),cashierId:currentUser.id,cashierName:currentUser.fullName,cash,electronic,total,count:paid.length};data.closings.unshift(c);save(data);logAction('Clôture caisse',`${currentUser.fullName} / ${money(total)} / ${paid.length} tickets`);renderAll(false);alert('Caisse clôturée : '+money(total))}
-async function renderClosings(){
+
   const res = await fetch("/api/closings");
   const list = await res.json();
 
