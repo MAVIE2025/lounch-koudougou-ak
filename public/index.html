@@ -691,6 +691,45 @@ async function createInvoice(){
   alert("Facture créée : " + inv.number);
 }
 function filterInvoices(list,type){const q=((type==='paid'?paidSearch&&paidSearch.value:invoiceSearch&&invoiceSearch.value)||'').toLowerCase();const d=(type==='paid'?paidDate&&paidDate.value:invoiceDate&&invoiceDate.value)||'';return list.filter(i=>{const txt=`${i.number} ${i.tableName||''} ${i.waitressName||''} ${i.cashierName||''}`.toLowerCase();const dateOk=!d||(i.createdAt&&i.createdAt.slice(0,10)===d)||(i.paidAt&&i.paidAt.slice(0,10)===d);return (!q||txt.includes(q))&&dateOk})}
+function invoiceTable(list, paid){
+  if(!Array.isArray(list) || list.length === 0){
+    return `<p class="muted">Aucune facture.</p>`;
+  }
+
+  return `
+    <table>
+      <tr>
+        <th>N°</th>
+        <th>Date</th>
+        <th>Table</th>
+        <th>Serveuse</th>
+        <th>Caissier</th>
+        <th>Total</th>
+        <th>Statut</th>
+        <th>Actions</th>
+      </tr>
+      ${list.map(i=>`
+        <tr class="${paid ? "paid" : "unpaid"}">
+          <td>${i.number}</td>
+          <td>${new Date(i.created_at).toLocaleString("fr-FR")}</td>
+          <td>${i.table_name || "-"}</td>
+          <td>${i.waitress_name || "-"}</td>
+          <td>${i.cashier_name || "-"}</td>
+          <td><b>${money(i.total)}</b></td>
+          <td>${i.status === "paid" ? "Payée" : "Non payée"}</td>
+          <td class="actions">
+            ${i.status !== "paid" ? `
+              <button class="small success" onclick="payInvoice('${i.id}')">Payer</button>
+              <button class="small danger" onclick="cancelInvoice('${i.id}')">Annuler</button>
+            ` : `
+              <button class="small blue" onclick="printTicketById('${i.id}','recu')">Reçu</button>
+            `}
+          </td>
+        </tr>
+      `).join("")}
+    </table>
+  `;
+}
 async function renderInvoices(){
   const [unpaidRes, paidRes] = await Promise.all([
     fetch("/api/invoices?status=unpaid"),
@@ -766,7 +805,35 @@ async function cancelInvoice(id){
 
   await refresh();
 }
-function printTicket(inv,type){ticketPrint.innerHTML=`<div style="text-align:center"><b>LOUNCH KOUDOUGOU AK</b><br>${type==='recu'?'REÇU':'TICKET COMMANDE'}<br>${inv.number}</div><hr>Date: ${new Date(type==='recu'?(inv.paidAt||inv.createdAt):inv.createdAt).toLocaleString('fr-FR')}<br>Table: ${inv.tableName||'-'}<br>Caissier: ${inv.cashierName}<br>Serveuse: ${inv.waitressName}<hr>${inv.items.map(x=>`${x.name}<br>${x.qty} x ${money(x.price)} = ${money(x.total)}`).join('<br>')}<hr><b>TOTAL: ${money(inv.total)}</b><br>${type==='recu'?`Mode: ${inv.paymentMode}<br>Remis: ${money(inv.amountGiven)}<br>Monnaie: ${money(inv.change)}`:'Statut: Non payé'}<hr><div style="text-align:center">Merci</div>`;window.print()}
+async function printTicketById(id,type){
+  const res = await fetch("/api/invoices/" + id + "/items");
+  const items = await res.json();
+
+  const allRes = await fetch("/api/invoices");
+  const invoices = await allRes.json();
+
+  const inv = invoices.find(x => String(x.id) === String(id));
+
+  if(!inv) return alert("Facture introuvable");
+
+  printTicket({
+    ...inv,
+    createdAt: inv.created_at,
+    paidAt: inv.paid_at,
+    tableName: inv.table_name,
+    cashierName: inv.cashier_name,
+    waitressName: inv.waitress_name,
+    paymentMode: inv.payment_mode,
+    amountGiven: inv.amount_given,
+    change: inv.change_amount,
+    items: items.map(it=>({
+      name: it.product_name,
+      qty: it.qty,
+      price: it.price,
+      total: it.total
+    }))
+  },type);
+}
 async function printDailyReport(){
   const res = await fetch("/api/invoices?status=paid");
   const paid = await res.json();
