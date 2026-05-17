@@ -709,7 +709,7 @@ function invoiceTable(list, paid){
         <th>Actions</th>
       </tr>
       ${list.map(i=>`
-        <tr class="${paid ? "paid" : "unpaid"}">
+        <tr class="${i.status === "paid" ? "paid" : "unpaid"}">
           <td>${i.number}</td>
           <td>${new Date(i.created_at).toLocaleString("fr-FR")}</td>
           <td>${i.table_name || "-"}</td>
@@ -718,11 +718,13 @@ function invoiceTable(list, paid){
           <td><b>${money(i.total)}</b></td>
           <td>${i.status === "paid" ? "Payée" : "Non payée"}</td>
           <td class="actions">
+            <button class="small blue" onclick="printTicketById('${i.id}','commande')">Ticket</button>
+
             ${i.status !== "paid" ? `
               <button class="small success" onclick="payInvoice('${i.id}')">Payer</button>
               <button class="small danger" onclick="cancelInvoice('${i.id}')">Annuler</button>
             ` : `
-              <button class="small blue" onclick="printTicketById('${i.id}','recu')">Reçu</button>
+              <button class="small success" onclick="printTicketById('${i.id}','recu')">Reçu</button>
             `}
           </td>
         </tr>
