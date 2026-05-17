@@ -836,6 +836,42 @@ async function printTicketById(id,type){
     }))
   },type);
 }
+function printTicket(inv, type){
+  const isPaid = type === "recu";
+
+  ticketPrint.innerHTML = `
+    <div style="text-align:center">
+      <b>LOUNCH KOUDOUGOU AK</b><br>
+      ${isPaid ? "REÇU DE PAIEMENT" : "TICKET COMMANDE NON PAYÉE"}<br>
+      <b>${inv.number}</b>
+    </div>
+    <hr>
+    Date : ${new Date(isPaid && inv.paidAt ? inv.paidAt : inv.createdAt).toLocaleString("fr-FR")}<br>
+    Table : ${inv.tableName || "-"}<br>
+    Caissier : ${inv.cashierName || "-"}<br>
+    Serveuse : ${inv.waitressName || "-"}<br>
+    <hr>
+    ${inv.items.map(x => `
+      ${x.name}<br>
+      ${x.qty} x ${money(x.price)} = ${money(x.total)}
+    `).join("<br>")}
+    <hr>
+    <b>TOTAL : ${money(inv.total)}</b><br>
+    ${isPaid ? `
+      Mode : ${inv.paymentMode || "-"}<br>
+      Remis : ${money(inv.amountGiven)}<br>
+      Monnaie : ${money(inv.change)}
+    ` : `
+      Statut : NON PAYÉ
+    `}
+    <hr>
+    <div style="text-align:center">Merci pour votre visite</div>
+  `;
+
+  setTimeout(()=>{
+    window.print();
+  },300);
+}
 async function printDailyReport(){
   const res = await fetch("/api/invoices?status=paid");
   const paid = await res.json();
