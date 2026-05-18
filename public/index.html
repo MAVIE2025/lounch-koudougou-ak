@@ -208,18 +208,8 @@ async function renderDashboard(){
     </table>
   ` : `<p class="muted">Aucune vente serveuse.</p>`;
 }
-  <table>
-    <tr><th>Serveuse</th><th>Cumul ventes</th></tr>
-    ${stats.waitressSales.map(w=>`
-      <tr>
-        <td>${w.waitress_name || "-"}</td>
-        <td><b>${money(w.total)}</b></td>
-      </tr>
-    `).join("")}
-  </table>
-` : `<p class="muted">Aucune vente serveuse.</p>`;
 }
-async function saveUser(){
+ async function saveUser(){
   if(!requireRoles(["admin"])) return alert("Accès refusé");
 
   const id = editingUserId.value;
