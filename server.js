@@ -737,8 +737,8 @@ app.get("/api/invoices/:id/items", async (req, res) => {
   res.json(r.rows);
 });
 
-app.post("/api/invoices", async (req, res) => {
-  const user = await getCurrentUser(req);
+app.post("/api/invoices", authMiddleware, async (req, res) => {
+  const user = req.user;
   if (!requireRole(user, ["admin", "cashier"])) return res.status(403).json({ error: "Accès refusé" });
 
   const { tableName, waitressId, items } = req.body;
@@ -803,7 +803,7 @@ app.post("/api/invoices", async (req, res) => {
   }
 });
 
-app.post("/api/invoices/:id/pay", async (req, res) => {
+app.post("/api/invoices/:id/pay", authMiddleware, async (req, res) => {
   const user = await getCurrentUser(req);
   if (!requireRole(user, ["admin", "cashier"])) return res.status(403).json({ error: "Accès refusé" });
 

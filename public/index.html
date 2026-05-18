@@ -446,6 +446,47 @@ async function deleteProduct(id){
 
   await refresh();
 }
+async function reStockProduct(id){
+  const qty = Number(prompt("Quantité à ajouter au stock :", "0"));
+
+  if(!qty || qty <= 0){
+    return alert("Quantité invalide.");
+  }
+
+  const resProducts = await fetch("/api/products");
+  const products = await resProducts.json();
+
+  const p = products.find(x => String(x.id) === String(id));
+
+  if(!p){
+    return alert("Produit introuvable");
+  }
+
+  const res = await fetch("/api/products",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    },
+    body:JSON.stringify({
+      name:p.name,
+      category:p.category,
+      price:p.price,
+      qty:qty,
+      alertQty:p.alert_qty,
+      deliveryPhoto:null
+    })
+  });
+
+  const data = await res.json();
+
+  if(!res.ok){
+    return alert(data.error || "Erreur réapprovisionnement");
+  }
+
+  alert("Stock réapprovisionné");
+  await refresh();
+}
 async function renderStock(){
   const token = sessionStorage.getItem("lounch_token");
 
@@ -504,6 +545,8 @@ async function renderStock(){
           <td>${p.created_by || ""}</td>
 
 <td class="actions">
+
+  <button class="small success" onclick="reStockProduct('${p.id}')">Réapprovisionner</button>
 
   <button
     class="small"
