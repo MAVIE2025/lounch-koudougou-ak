@@ -935,12 +935,22 @@ app.get("/api/stats", async (req, res) => {
     LIMIT 10
   `);
 
+  const waitressSales = await query(`
+  SELECT waitress_name, COALESCE(SUM(total),0)::int AS total
+  FROM invoices
+  WHERE status='paid'
+  GROUP BY waitress_name
+  ORDER BY total DESC
+`);
+
   res.json({
     day: day.rows[0].total,
     month: month.rows[0].total,
     unpaid: unpaid.rows[0].c,
     lowStock: low.rows[0].c,
     topProducts: top.rows
+    waitressSales: waitressSales.rows,
+
   });
 });
 

@@ -111,6 +111,45 @@ async function toggleUser(id){
 
   await refresh();
 }
+async function viewDeliveryPhoto(id){
+  if(currentUser.role !== "admin"){
+    return alert("Accès réservé à l’admin");
+  }
+
+  const res = await fetch("/api/products");
+  const products = await res.json();
+
+  const p = products.find(x => String(x.id) === String(id));
+
+  if(!p || !p.delivery_photo){
+    return alert("Aucun bordereau disponible");
+  }
+
+  const w = window.open("", "_blank");
+
+  w.document.write(`
+    <html>
+      <head>
+        <title>Bordereau - ${p.name}</title>
+        <style>
+          body{font-family:Arial;padding:20px;background:#f7f2e8}
+          img{max-width:100%;height:auto;border:1px solid #ddd;border-radius:12px}
+          button{padding:10px 14px;border:0;border-radius:8px;background:#8b5e1f;color:white;font-weight:bold;cursor:pointer}
+        </style>
+      </head>
+      <body>
+        <h2>Bordereau : ${p.name}</h2>
+        <p>Catégorie : ${p.category || "-"}</p>
+        <p>Créé par : ${p.created_by || "-"}</p>
+        <button onclick="window.print()">Imprimer</button>
+        <hr>
+        <img src="${p.delivery_photo}">
+      </body>
+    </html>
+  `);
+
+  w.document.close();
+}
 async function renderDashboard(){
   const res = await fetch("/api/stats");
   const stats = await res.json();
@@ -151,7 +190,34 @@ async function renderDashboard(){
 
   recentLogs.innerHTML = rows.body ? rows.body + rows.btn : `<p class="muted">Aucun log.</p>`;
 
-  waitressStats.innerHTML = `<p class="muted">Recettes par serveuse : à connecter dans l’étape suivante.</p>`;
+  if(currentUser.role !== "admin"){
+  waitressStats.innerHTML = `<p class="muted">Réservé à l’administration.</p>`;
+}else{
+  waitressStats.innerHTML = stats.waitressSales && stats.waitressSales.length ? `
+    <table>
+      <tr>
+        <th>Serveuse</th>
+        <th>Cumul ventes</th>
+      </tr>
+      ${stats.waitressSales.map(w=>`
+        <tr>
+          <td>${w.waitress_name || "-"}</td>
+          <td><b>${money(w.total)}</b></td>
+        </tr>
+      `).join("")}
+    </table>
+  ` : `<p class="muted">Aucune vente serveuse.</p>`;
+}
+  <table>
+    <tr><th>Serveuse</th><th>Cumul ventes</th></tr>
+    ${stats.waitressSales.map(w=>`
+      <tr>
+        <td>${w.waitress_name || "-"}</td>
+        <td><b>${money(w.total)}</b></td>
+      </tr>
+    `).join("")}
+  </table>
+` : `<p class="muted">Aucune vente serveuse.</p>`;
 }
 async function saveUser(){
   if(!requireRoles(["admin"])) return alert("Accès refusé");
@@ -439,7 +505,12 @@ async function renderStock(){
           <td>${money(p.price)}</td>
           <td><span class="badge ${Number(p.qty)<=Number(p.alert_qty)?'danger':'ok'}">${p.qty}</span></td>
           <td>${p.alert_qty}</td>
-          <td>${p.delivery_photo ? `<img src="${p.delivery_photo}" class="delivery-photo">` : "-"}</td>
+          <td>
+  ${p.delivery_photo ? `
+    <img src="${p.delivery_photo}" class="delivery-photo" style="cursor:pointer" onclick="viewDeliveryPhoto('${p.id}')">
+    ${currentUser.role === "admin" ? `<br><button class="small blue" onclick="viewDeliveryPhoto('${p.id}')">Voir</button>` : ""}
+  ` : "-"}
+</td>
           <td>${p.created_by || ""}</td>
 
 <td class="actions">
@@ -660,6 +731,7 @@ async function createInvoice(){
   if(!waitressId || valid.length === 0){
     return alert("Sélectionne une serveuse et au moins un produit.");
   }
+  const payNow = confirm("Voulez-vous régler cette commande maintenant ?\n\nOK = Régler maintenant\nAnnuler = Régler plus tard");
 
   const items = valid.map(l => ({
     productId: Number(l.productId),
@@ -685,10 +757,19 @@ async function createInvoice(){
     return alert(inv.error || "Erreur création facture");
   }
 
-  cart = [];
-  await refresh();
+ cart = [];
+await refresh();
 
+if(payNow){
+  const ok = await payInvoice(inv.id);
+
+  if(ok){
+    alert("Commande créée et réglée avec succès.");
+  }
+}else{
   alert("Facture créée : " + inv.number);
+  await printTicketById(inv.id, "commande");
+}
 }
 function filterInvoices(list,type){const q=((type==='paid'?paidSearch&&paidSearch.value:invoiceSearch&&invoiceSearch.value)||'').toLowerCase();const d=(type==='paid'?paidDate&&paidDate.value:invoiceDate&&invoiceDate.value)||'';return list.filter(i=>{const txt=`${i.number} ${i.tableName||''} ${i.waitressName||''} ${i.cashierName||''}`.toLowerCase();const dateOk=!d||(i.createdAt&&i.createdAt.slice(0,10)===d)||(i.paidAt&&i.paidAt.slice(0,10)===d);return (!q||txt.includes(q))&&dateOk})}
 function invoiceTable(list, paid){
@@ -759,7 +840,7 @@ async function payInvoice(id){
   }else if(mode === "4"){
     paymentMode = "Telecel Money";
   }else{
-    return;
+    return false;
   }
 
   const res = await fetch("/api/invoices/" + id + "/pay",{
@@ -768,20 +849,20 @@ async function payInvoice(id){
       "Content-Type":"application/json",
       "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
     },
-    body:JSON.stringify({
-      paymentMode,
-      amountGiven
-    })
+    body:JSON.stringify({ paymentMode, amountGiven })
   });
 
   const data = await res.json();
 
   if(!res.ok){
-    return alert(data.error || "Erreur règlement facture");
+    alert(data.error || "Erreur règlement facture");
+    return false;
   }
 
   await refresh();
-  alert("Facture réglée");
+  await printTicketById(id, "recu");
+
+  return true;
 }
 async function cancelInvoice(id){
   const reason = prompt("Motif obligatoire de l’annulation");
