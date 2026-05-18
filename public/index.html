@@ -32,6 +32,33 @@ const APP_KEY='lounch_koudougou_ak_v2';let currentUser=null;let editingProductId
 function uid(p='id'){return p+'_'+Date.now()+'_'+Math.floor(Math.random()*9999)}function nowISO(){return new Date().toISOString()}function money(n){return (Number(n)||0).toLocaleString('fr-FR')+' F'}function today(){return new Date().toISOString().slice(0,10)}function month(){return new Date().toISOString().slice(0,7)}
 function load(){let data=JSON.parse(localStorage.getItem(APP_KEY)||'null');if(!data){data={users:[{id:uid('usr'),fullName:'Super Administrateur',username:'admin',password:'admin123',role:'admin',active:true,createdAt:nowISO()}],products:[],invoices:[],logs:[],stockHistory:[],tables:['Table 1','Table 2','Table 3','VIP 1'],closings:[]};localStorage.setItem(APP_KEY,JSON.stringify(data))}data.stockHistory=data.stockHistory||[];data.tables=data.tables||['Table 1'];data.closings=data.closings||[];return data}function save(data){localStorage.setItem(APP_KEY,JSON.stringify(data))}
 function logAction(action,details=''){const data=load();data.logs.unshift({id:uid('log'),at:nowISO(),user:currentUser?currentUser.fullName:'Système',role:currentUser?currentUser.role:'system',action,details});save(data)}function roleLabel(r){return{admin:'Super Admin / Admin',cashier:'Caissier',waitress:'Serveuse',storekeeper:'Magasinier'}[r]||r}function requireRoles(rs){return currentUser&&rs.includes(currentUser.role)}
+function restoreSession(){
+
+  const s = sessionStorage.getItem("lounch_current_user");
+  const token = sessionStorage.getItem("lounch_token");
+
+  if(!s || !token){
+    sessionStorage.removeItem("lounch_current_user");
+    sessionStorage.removeItem("lounch_token");
+    return;
+  }
+
+  try{
+
+    currentUser = JSON.parse(s);
+
+    loginPage.classList.add("hidden");
+    appPage.classList.remove("hidden");
+
+    renderAll();
+
+  }catch(err){
+
+    sessionStorage.removeItem("lounch_current_user");
+    sessionStorage.removeItem("lounch_token");
+
+  }
+}
 async function login(){
   const username = loginUsername.value.trim();
   const password = loginPassword.value;
@@ -64,6 +91,9 @@ async function login(){
     };
 
     sessionStorage.setItem("lounch_current_user", JSON.stringify(currentUser));
+    if(data.token){
+  sessionStorage.setItem("lounch_token", data.token);
+}
 
     loginPage.classList.add("hidden");
     appPage.classList.remove("hidden");
@@ -78,7 +108,11 @@ async function login(){
     loginError.textContent = "Erreur serveur ou interface";
   }
 }
-function logout(){logAction('Déconnexion','Sortie du logiciel');sessionStorage.removeItem('lounch_current_user');location.reload()}function initSession(){const s=sessionStorage.getItem('lounch_current_user');if(s){currentUser=JSON.parse(s);loginPage.classList.add('hidden');appPage.classList.remove('hidden');renderAll();if(currentUser.role==='storekeeper')showSection('stock','Stock / bordereaux');if(currentUser.role==='waitress')showSection('myorders','Mes commandes')}}
+function logout(){
+  sessionStorage.removeItem("lounch_current_user");
+  sessionStorage.removeItem("lounch_token");
+  location.reload();
+}
 function buildMenu(){const items=[['dashboard','Tableau de bord',['admin','cashier']],['users','Utilisateurs',['admin']],['stock','Stock / bordereaux',['admin','storekeeper']],['orders','Nouvelle commande',['admin','cashier']],['tables','Tables',['admin','cashier']],['unpaid','Factures non payées',['admin','cashier']],['paid','Factures payées',['admin','cashier']],['closing','Clôture caisse',['admin','cashier']],['backup','Sauvegarde',['admin','cashier']],['myorders','Mes commandes',['waitress']],['logs','Logs actions',['admin']]];menu.innerHTML='';items.filter(i=>i[2].includes(currentUser.role)).forEach(i=>{const b=document.createElement('button');b.textContent=i[1];b.onclick=()=>showSection(i[0],i[1]);b.id='btn_'+i[0];menu.appendChild(b)})}
 function showSection(id,title){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));const btn=document.getElementById('btn_'+id);if(btn)btn.classList.add('active');pageTitle.textContent=title;renderAll(false)}function renderAll(rebuildMenu=true){if(!currentUser)return;currentUserInfo.textContent=currentUser.fullName+' — '+roleLabel(currentUser.role);todayText.textContent=new Date().toLocaleString('fr-FR');if(rebuildMenu)buildMenu();renderDashboard();renderUsers();renderStock();renderTables();renderWaitressOptions();renderCart();renderInvoices();renderLogs();renderMyOrders();renderClosings()}
 function limitedRows(key, list, renderer, limit=20){
@@ -116,7 +150,11 @@ async function viewDeliveryPhoto(id){
     return alert("Accès réservé à l’admin");
   }
 
-  const res = await fetch("/api/products");
+  const res = await fetch("/api/products",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
   const products = await res.json();
 
   const p = products.find(x => String(x.id) === String(id));
@@ -1166,20 +1204,25 @@ async function exportBackup(){
   a.click();
 }
 async function refresh(){
-  renderDashboard();
-  renderUsers();
-  renderStock();
-  renderTables();
-  renderWaitressOptions();
-  renderCart();
-  renderInvoices();
-  renderLogs();
-  renderMyOrders();
-  renderClosings();
-  lastRefreshAt = Date.now();
+  try{
+    await renderDashboard();
+    await renderUsers();
+    await renderStock();
+    await renderTables();
+    await renderWaitressOptions();
+    await renderCart();
+    await renderInvoices();
+    await renderLogs();
+    await renderMyOrders();
+    await renderClosings();
+
+    lastRefreshAt = Date.now();
+  }catch(err){
+    console.error(err);
+  }
 }
 addCartLine();
-initSession();
+restoreSession();
 let lastRefreshAt = 0;
 
 setInterval(async ()=>{
