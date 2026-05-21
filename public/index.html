@@ -3,18 +3,33 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LOUNCH KOUDOUGOU AK - Gestion</title>
+<title>LE DOMAINE</title>
 <style>
 :root{--primary:#8b5e1f;--primary2:#c9912e;--dark:#17120b;--bg:#f7f2e8;--card:#fffaf1;--text:#24180c;--muted:#766857;--border:#e3d2b5;--success:#15803d;--danger:#b91c1c;--warning:#b45309;--blue:#1d4ed8;--shadow:0 8px 25px rgba(0,0,0,.09)}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}.hidden{display:none!important}.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#2a1b09,#8b5e1f,#f0c46c)}.login-card{width:100%;max-width:430px;background:rgba(255,250,241,.97);padding:28px;border-radius:22px;box-shadow:var(--shadow)}h1,h2,h3{margin:0 0 12px}.brand{text-align:center;margin-bottom:20px}.brand h1{font-size:25px;color:var(--primary)}.brand p{margin:6px 0 0;color:var(--muted)}label{display:block;font-weight:700;margin:12px 0 6px}input,select,textarea,button{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);font-size:14px}button{cursor:pointer;border:0;background:linear-gradient(135deg,var(--primary),var(--primary2));color:white;font-weight:700}button.secondary{background:#fff;color:var(--primary);border:1px solid var(--border)}button.danger{background:var(--danger)}button.success{background:var(--success)}button.warning{background:var(--warning)}button.blue{background:var(--blue)}button.small{padding:7px 9px;font-size:12px;width:auto}.layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}aside{background:#211507;color:white;padding:20px;position:sticky;top:0;height:100vh;overflow:auto}aside h2{font-size:20px;color:#ffd27a;margin-bottom:4px}aside .role{font-size:12px;color:#e8c98d;margin-bottom:18px}nav button{margin:6px 0;text-align:left;background:transparent;border:1px solid rgba(255,255,255,.12);color:white}nav button.active,nav button:hover{background:rgba(255,255,255,.12)}main{padding:24px;overflow:auto}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}.topbar h1{font-size:24px;color:var(--primary)}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:18px}.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.card{background:var(--card);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:18px;margin-bottom:16px}.kpi{background:linear-gradient(135deg,#fffaf1,#f3e1bd);border:1px solid var(--border);border-radius:16px;padding:16px}.kpi b{display:block;font-size:21px;margin-top:8px;color:var(--primary)}.muted{color:var(--muted);font-size:13px}table{width:100%;border-collapse:collapse;background:white;border-radius:12px;overflow:hidden}th,td{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px;vertical-align:top}th{background:#f2e3c6;color:#3a260d}tr.paid{background:#ecfdf3}tr.unpaid{background:#fff7ed}.badge{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}.badge.ok{background:#dcfce7;color:#166534}.badge.warn{background:#fef3c7;color:#92400e}.badge.danger{background:#fee2e2;color:#991b1b}.actions{display:flex;gap:6px;flex-wrap:wrap}.section{display:none}.section.active{display:block}.cart-line{display:grid;grid-template-columns:2fr .8fr .8fr auto;gap:8px;align-items:end;margin-bottom:8px}.alert{padding:12px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;color:#92400e;margin-bottom:12px}.log-item{padding:10px;border-left:4px solid var(--primary2);background:white;margin-bottom:8px;border-radius:8px}.delivery-photo{max-width:70px;max-height:70px;border-radius:8px;border:1px solid var(--border)}.print-ticket{display:none}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}.print-area{display:none}
 @media(max-width:900px){.layout{grid-template-columns:1fr}aside{height:auto;position:relative}.grid,.grid-2,.grid-3{grid-template-columns:1fr}.cart-line{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:stretch}}
 @page{size:80mm auto;margin:3mm}
 @media print{body *{visibility:hidden!important}.print-ticket,.print-ticket *{visibility:visible!important}.print-ticket{display:block!important;position:absolute;left:0;top:0;width:72mm;background:white;color:#000;padding:6px;font-family:Arial,sans-serif;font-size:11px}.print-ticket hr{border:0;border-top:1px dashed #000}.no-print{display:none!important}}
+.main-logo{
+  width:90px;
+  height:90px;
+  object-fit:contain;
+  display:block;
+  margin:0 auto 12px auto;
+}
+
+.login-logo{
+  width:120px;
+  height:120px;
+  object-fit:contain;
+  display:block;
+  margin:0 auto 15px auto;
+}
 </style>
 </head>
 <body>
-<div id="loginPage" class="login-wrap"><div class="login-card"><div class="brand"><h1>LOUNCH KOUDOUGOU AK</h1><p>Logiciel de gestion maquis-bar</p></div><div class="alert"><br>Votre Espace : <b>LOUNCH KABORE</b><br> </b><br>Role : <b>ADMINISTRATION</b></div><label>Nom utilisateur</label><input id="loginUsername" placeholder="Votre Identifiant"><label>Mot de passe</label><input id="loginPassword" type="password" placeholder="Votre Mot de Passe"><button onclick="login()">Se connecter</button><p id="loginError" class="muted"></p></div></div>
-<div id="appPage" class="hidden"><div class="layout"><aside><h2>LOUNCH AK</h2><div class="role" id="currentUserInfo"></div><nav id="menu"></nav><button class="danger" onclick="logout()" style="margin-top:16px">Déconnexion</button></aside><main><div class="topbar"><h1 id="pageTitle">Tableau de bord</h1><div class="muted" id="todayText"></div></div>
+<div id="loginPage" class="login-wrap"><div class="login-card"><div class="brand"><img src="logo.png" class="login-logo"><h1>LE DOMAINE</h1><p>Logiciel de gestion maquis-bar</p></div><div class="alert"><br>Votre Espace : <b>LE DOMAINE</b><br> </b><br>Role : <b>ADMINISTRATION</b></div><label>Nom utilisateur</label><input id="loginUsername" placeholder="Votre Identifiant"><label>Mot de passe</label><input id="loginPassword" type="password" placeholder="Votre Mot de Passe"><button onclick="login()">Se connecter</button><p id="loginError" class="muted"></p></div></div>
+<div id="appPage" class="hidden"><div class="layout"><aside><img src="logo.png" class="main-logo"><h2>LE DOMAINE</h2><div class="role" id="currentUserInfo"></div><nav id="menu"></nav><button class="danger" onclick="logout()" style="margin-top:16px">Déconnexion</button></aside><main><div class="topbar"><h1 id="pageTitle">Tableau de bord</h1><div class="muted" id="todayText"></div></div>
 <section id="dashboard" class="section active"><div id="stockAlerts"></div><div class="grid"><div class="kpi">Ventes jour<b id="kpiDay">0 F</b></div><div class="kpi">Ventes mois<b id="kpiMonth">0 F</b></div><div class="kpi">Factures non payées<b id="kpiUnpaid">0</b></div><div class="kpi">Stock faible<b id="kpiLowStock">0</b></div></div><div class="grid-2"><div class="card"><h3>Recettes par serveuse</h3><div id="waitressStats"></div></div><div class="card" id="recentLogsCard"><h3>Dernières activités</h3><div id="recentLogs"></div></div></div><div class="card"><h3>Produits les plus vendus</h3><div id="topProducts"></div></div></section>
 <section id="users" class="section"><div class="card"><h3 id="userFormTitle">Créer un utilisateur</h3><input id="editingUserId" type="hidden"><div class="grid-3"><div><label>Nom complet</label><input id="userFullName"></div><div><label>Nom utilisateur</label><input id="userName"></div><div><label>Rôle</label><select id="userRole"><option value="admin">Admin</option><option value="cashier">Caissier</option><option value="waitress">Serveuse</option><option value="storekeeper">Magasinier</option></select></div></div><label>Mot de passe</label><input id="userPassword" type="text"><div class="grid-2"><button onclick="saveUser()">Enregistrer utilisateur</button><button class="secondary" onclick="resetUserForm()">Annuler / Nouveau</button></div></div><div class="card"><h3>Liste utilisateurs</h3><div id="usersTable"></div></div></section>
 <section id="stock" class="section"><div class="card"><h3>Créer / renseigner un item stock</h3><div class="grid-3"><div><label>Nom item</label><input id="productName" list="productList" placeholder="Ex: Brakina 65cl" oninput="prefillExistingProduct()"><datalist id="productList"></datalist></div><div><label>Catégorie</label><input id="productCategory" list="categoryList" placeholder="Boisson, plat..."><datalist id="categoryList"></datalist></div><div><label>Prix vente</label><input id="productPrice" type="number" min="0"></div><div><label>Quantité</label><input id="productQty" type="number" min="0"></div><div><label>Seuil alerte</label><input id="productAlert" type="number" min="0"></div><div><label>Photo bordereau livraison</label><input id="deliveryPhoto" type="file" accept="image/*"></div></div><button onclick="saveProduct()">Enregistrer stock</button></div><div class="card"><h3>Recherche stock</h3><input id="stockSearch" placeholder="Rechercher produit ou catégorie" oninput="renderStock()"></div><div class="card"><h3>Stock actuel</h3><div id="stockTable"></div></div><div class="card"><h3>Historique détaillé du stock</h3><div id="stockHistoryTable"></div></div></section>
@@ -28,7 +43,7 @@
 <section id="logs" class="section"><div class="card"><h3>Journal des actions</h3><div id="logsList"></div></div></section>
 </main></div></div><div id="ticketPrint" class="print-ticket"></div>
 <script>
-const APP_KEY='lounch_koudougou_ak_v2';let currentUser=null;let editingProductId=null;let cart=[];let backendProducts=[];
+const APP_KEY='le_domaine_v1';let currentUser=null;let editingProductId=null;let cart=[];let backendProducts=[];
 function uid(p='id'){return p+'_'+Date.now()+'_'+Math.floor(Math.random()*9999)}function nowISO(){return new Date().toISOString()}function money(n){return (Number(n)||0).toLocaleString('fr-FR')+' F'}function today(){return new Date().toISOString().slice(0,10)}function month(){return new Date().toISOString().slice(0,7)}
 function load(){let data=JSON.parse(localStorage.getItem(APP_KEY)||'null');if(!data){data={users:[{id:uid('usr'),fullName:'Super Administrateur',username:'admin',password:'admin123',role:'admin',active:true,createdAt:nowISO()}],products:[],invoices:[],logs:[],stockHistory:[],tables:['Table 1','Table 2','Table 3','VIP 1'],closings:[]};localStorage.setItem(APP_KEY,JSON.stringify(data))}data.stockHistory=data.stockHistory||[];data.tables=data.tables||['Table 1'];data.closings=data.closings||[];return data}function save(data){localStorage.setItem(APP_KEY,JSON.stringify(data))}
 function logAction(action,details=''){const data=load();data.logs.unshift({id:uid('log'),at:nowISO(),user:currentUser?currentUser.fullName:'Système',role:currentUser?currentUser.role:'system',action,details});save(data)}function roleLabel(r){return{admin:'Super Admin / Admin',cashier:'Caissier',waitress:'Serveuse',storekeeper:'Magasinier'}[r]||r}function requireRoles(rs){return currentUser&&rs.includes(currentUser.role)}
@@ -59,6 +74,7 @@ function restoreSession(){
 
   }
 }
+  
 async function login(){
   const username = loginUsername.value.trim();
   const password = loginPassword.value;
@@ -189,7 +205,11 @@ async function viewDeliveryPhoto(id){
   w.document.close();
 }
 async function renderDashboard(){
-  const res = await fetch("/api/stats");
+  const res = await fetch("/api/stats",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
   const stats = await res.json();
 
   kpiDay.textContent = money(stats.day);
@@ -215,7 +235,11 @@ async function renderDashboard(){
     </table>
   ` : `<p class="muted">Aucune vente.</p>`;
 
-  const logsRes = await fetch("/api/logs");
+  const logsRes = await fetch("/api/logs",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
   const logs = await logsRes.json();
 
   const rows = limitedRows("recent_logs", logs, l=>`
@@ -316,7 +340,38 @@ async function editUser(id){
 
   showSection("users","Utilisateurs");
 }
-function resetPassword(id){const data=load();const u=data.users.find(x=>x.id===id);if(!u)return;const p=prompt('Nouveau mot de passe pour '+u.fullName);if(!p||p.trim().length<3)return alert('Mot de passe trop court ou annulé.');u.password=p.trim();u.updatedAt=nowISO();u.updatedBy=currentUser.fullName;save(data);logAction('Réinitialisation mot de passe',u.fullName);renderAll(false)}
+async function resetPassword(id){
+
+  const password = prompt("Nouveau mot de passe");
+
+  if(!password || password.trim().length < 3){
+    return alert("Mot de passe trop court");
+  }
+
+  const res = await fetch(
+    "/api/users/" + id + "/password",
+    {
+      method:"PATCH",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+      },
+      body:JSON.stringify({
+        password
+      })
+    }
+  );
+
+  const data = await res.json();
+
+  if(!res.ok){
+    return alert(data.error || "Erreur mot de passe");
+  }
+
+  alert("Mot de passe réinitialisé");
+
+  await refresh();
+}
 async function renderUsers(){
   if(!usersTable) return;
 
@@ -348,7 +403,7 @@ async function renderUsers(){
           <tr>
             <td>${u.full_name}</td>
             <td>${u.username}</td>
-            <td><b>${u.plain_password || ""}</b></td>
+            <td>••••••••</td>
             <td>${roleLabel(u.role)}</td>
             <td>${u.active ? "Actif" : "Désactivé"}</td>
             <td class="actions">
@@ -440,7 +495,11 @@ alert("Stock enregistré");
 await refresh();
 }
 async function editProduct(id){
-  const res = await fetch("/api/products");
+  const res = await fetch("/api/products",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
   const products = await res.json();
 
   const p = products.find(x => String(x.id) === String(id));
@@ -491,29 +550,13 @@ async function reStockProduct(id){
     return alert("Quantité invalide.");
   }
 
-  const resProducts = await fetch("/api/products");
-  const products = await resProducts.json();
-
-  const p = products.find(x => String(x.id) === String(id));
-
-  if(!p){
-    return alert("Produit introuvable");
-  }
-
-  const res = await fetch("/api/products",{
-    method:"POST",
+  const res = await fetch("/api/products/" + id + "/restock",{
+    method:"PATCH",
     headers:{
       "Content-Type":"application/json",
       "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
     },
-    body:JSON.stringify({
-      name:p.name,
-      category:p.category,
-      price:p.price,
-      qty:qty,
-      alertQty:p.alert_qty,
-      deliveryPhoto:null
-    })
+    body:JSON.stringify({ qty })
   });
 
   const data = await res.json();
@@ -529,9 +572,17 @@ async function renderStock(){
   const token = sessionStorage.getItem("lounch_token");
 
   const [productsRes, historyRes] = await Promise.all([
-    fetch("/api/products"),
-    fetch("/api/stock-history")
-  ]);
+  fetch("/api/products",{
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  }),
+  fetch("/api/stock-history",{
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  })
+]);
 
   const products = await productsRes.json();backendProducts = products;
   const history = await historyRes.json();
@@ -632,7 +683,11 @@ async function renderStock(){
   ` : `<p class="muted">Aucun historique stock.</p>`;
 }
 async function renderTables(){
-  const res = await fetch("/api/tables");
+  const res = await fetch("/api/tables",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
   const tables = await res.json();
 
   orderTable.innerHTML = tables.map(t =>
@@ -700,7 +755,11 @@ async function deleteTable(id){
   await refresh();
 }
 async function renderWaitressOptions(){
-  const res = await fetch("/api/waitresses");
+  const res = await fetch("/api/waitresses",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
   const waitresses = await res.json();
 
   orderWaitress.innerHTML = waitresses.length
@@ -710,7 +769,11 @@ async function renderWaitressOptions(){
 async function renderCart(){
 
   if(!backendProducts.length){
-    const res = await fetch("/api/products");
+    const res = await fetch("/api/products",{
+  headers:{
+    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+  }
+});
     backendProducts = await res.json();
   }
 
@@ -993,7 +1056,8 @@ function printTicket(inv, type){
 
   ticketPrint.innerHTML = `
     <div style="text-align:center">
-      <b>LOUNCH KOUDOUGOU AK</b><br>
+      <img src="logo.png" style="width:80px;height:80px;object-fit:contain"><br>
+<b>LE DOMAINE</b>
       ${isPaid ? "REÇU DE PAIEMENT" : "TICKET COMMANDE NON PAYÉE"}<br>
       <b>${inv.number}</b>
     </div>
@@ -1052,7 +1116,7 @@ async function printDailyReport(){
 
   ticketPrint.innerHTML = `
     <div style="text-align:center">
-      <b>LOUNCH KOUDOUGOU AK</b><br>
+      <b>LE DOMAINE</b><br>
       RAPPORT JOURNALIER<br>
       ${new Date().toLocaleDateString("fr-FR")}
     </div>
@@ -1200,7 +1264,7 @@ async function exportBackup(){
 
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "backup_lounch_koudougou_ak_" + today() + ".json";
+  a.download = "backup_le_domaine_" + today() + ".json";
   a.click();
 }
 async function refresh(){

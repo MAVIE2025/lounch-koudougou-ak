@@ -290,6 +290,67 @@ app.put("/api/users/:id", authMiddleware, async (req, res) => {
   }
 });
 
+app.patch("/api/users/:id/password", authMiddleware, async (req, res) => {
+
+  try{
+
+    if(!requireRole(req.user, ["admin"])){
+      return res.status(403).json({
+        error:"Accès refusé"
+      });
+    }
+
+    const password = String(req.body.password || "").trim();
+
+    if(password.length < 3){
+      return res.status(400).json({
+        error:"Mot de passe trop court"
+      });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+
+    const result = await query(
+      `UPDATE users
+       SET password_hash=$1,
+           plain_password=$2
+       WHERE id=$3
+       RETURNING id, full_name, username`,
+      [
+        hash,
+        password,
+        req.params.id
+      ]
+    );
+
+    if(!result.rows.length){
+      return res.status(404).json({
+        error:"Utilisateur introuvable"
+      });
+    }
+
+    await addLog(
+      req.user,
+      "Réinitialisation mot de passe",
+      result.rows[0].full_name
+    );
+
+    res.json({
+      success:true
+    });
+
+  }catch(err){
+
+    console.error(err);
+
+    res.status(500).json({
+      error:"Erreur serveur"
+    });
+
+  }
+
+});
+
 app.patch("/api/users/:id/toggle", authMiddleware, async (req, res) => {
   try {
     if (!requireRole(req.user, ["admin"])) {
@@ -420,6 +481,81 @@ app.delete("/api/products/:id", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+app.patch("/api/products/:id/restock", authMiddleware, async (req, res) => {
+  try {
+
+    if (!requireRole(req.user, ["admin", "storekeeper"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const qtyToAdd = Number(req.body.qty);
+
+    if (!qtyToAdd || qtyToAdd <= 0) {
+      return res.status(400).json({ error: "Quantité invalide" });
+    }
+
+    const old = await query(
+      "SELECT * FROM products WHERE id=$1",
+      [req.params.id]
+    );
+
+    if (!old.rows.length) {
+      return res.status(404).json({ error: "Produit introuvable" });
+    }
+
+    const p = old.rows[0];
+
+    const before = Number(p.qty);
+    const after = before + qtyToAdd;
+
+    const result = await query(
+      `UPDATE products
+       SET qty=$1,
+           updated_by=$2,
+           updated_at=NOW()
+       WHERE id=$3
+       RETURNING *`,
+      [
+        after,
+        req.user.full_name,
+        req.params.id
+      ]
+    );
+
+    await query(
+      `INSERT INTO stock_history
+      (
+        product_name,
+        before_qty,
+        after_qty,
+        diff_qty,
+        action_type,
+        user_name
+      )
+      VALUES($1,$2,$3,$4,$5,$6)`,
+      [
+        p.name,
+        before,
+        after,
+        qtyToAdd,
+        "Réapprovisionnement",
+        req.user.full_name
+      ]
+    );
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+
+    console.error(err);
+
+    res.status(500).json({
+      error: "Erreur réapprovisionnement"
+    });
+
   }
 });
 
@@ -561,21 +697,6 @@ app.post("/api/users", authMiddleware, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Erreur serveur" });
   }
-});
-
-app.put("/api/users/:id", authMiddleware, async (req, res) => {
-  if (!requireRole(req.user, ["admin"])) return res.status(403).json({ error: "Accès refusé" });
-
-  const { fullName, username, password, role, active } = req.body;
-  const hash = await bcrypt.hash(password, 10);
-
-  const r = await query(
-    "UPDATE users SET full_name=$1, username=$2, password_hash=$3, plain_password=$4, role=$5, active=$6 WHERE id=$7 RETURNING id, full_name, username, plain_password, role, active",
-    [fullName, username, hash, password, role, active, req.params.id]
-  );
-
-  await addLog(req.user, "Modification utilisateur", `${fullName} (${role})`);
-  res.json(r.rows[0]);
 });
 
 app.get("/api/products", async (req, res) => {
