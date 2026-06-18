@@ -1217,7 +1217,7 @@ res.json({
   unpaid: unpaid.rows[0].c,
   lowStock: low.rows[0].c,
   topProducts: top.rows,
-  waitressSales: waitressSales.rows
+  waitressSales: waitressSales.rows,
   withdrawals: withdrawals.rows[0].total,
 cashBalance: Number(day.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0)
 }); 
