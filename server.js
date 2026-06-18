@@ -1211,6 +1211,12 @@ const withdrawals = await query(`
   FROM cash_withdrawals
 `);
 
+const allSales = await query(`
+  SELECT COALESCE(SUM(total),0)::int AS total
+  FROM invoices
+  WHERE status='paid'
+`);
+
 res.json({
   day: day.rows[0].total,
   month: month.rows[0].total,
@@ -1219,7 +1225,8 @@ res.json({
   topProducts: top.rows,
   waitressSales: waitressSales.rows,
   withdrawals: withdrawals.rows[0].total,
-cashBalance: Number(day.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0)
+allSales: allSales.rows[0].total,
+cashBalance: Number(allSales.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0)
 }); 
 
 });
