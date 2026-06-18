@@ -208,7 +208,15 @@ async function initDb() {
     created_at TIMESTAMP DEFAULT NOW()
   );
 `);
-
+await query(`
+  CREATE TABLE IF NOT EXISTS cash_withdrawals (
+    id SERIAL PRIMARY KEY,
+    amount INTEGER NOT NULL,
+    reason TEXT,
+    created_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`);
   await query(`
     CREATE TABLE IF NOT EXISTS cash_closings (
       id SERIAL PRIMARY KEY,
@@ -1097,6 +1105,72 @@ app.post("/api/invoices/:id/gap", authMiddleware, async (req, res) => {
   }
 });
 
+app.post("/api/withdrawals", authMiddleware, async (req,res)=>{
+  try{
+
+    if(!requireRole(req.user, ["admin"])){
+      return res.status(403).json({
+        error:"Accès refusé"
+      });
+    }
+
+    const amount = Number(req.body.amount);
+    const reason = String(req.body.reason || "").trim();
+
+    if(!amount || amount <= 0){
+      return res.status(400).json({
+        error:"Montant invalide"
+      });
+    }
+
+    const result = await query(
+      `INSERT INTO cash_withdrawals
+      (amount, reason, created_by)
+      VALUES($1,$2,$3)
+      RETURNING *`,
+      [
+        amount,
+        reason,
+        req.user.full_name
+      ]
+    );
+
+    await addLog(
+      req.user,
+      "Retrait caisse",
+      amount + " F"
+    );
+
+    res.json(result.rows[0]);
+
+  }catch(err){
+
+    console.error(err);
+
+    res.status(500).json({
+      error:"Erreur retrait"
+    });
+
+  }
+});
+
+app.get("/api/withdrawals", authMiddleware, async (req,res)=>{
+
+  if(!requireRole(req.user, ["admin"])){
+    return res.status(403).json({
+      error:"Accès refusé"
+    });
+  }
+
+  const result = await query(
+    `SELECT *
+     FROM cash_withdrawals
+     ORDER BY id DESC`
+  );
+
+  res.json(result.rows);
+});
+
 app.get("/api/closings", async (req, res) => {
   const r = await query("SELECT * FROM cash_closings ORDER BY id DESC LIMIT 200");
   res.json(r.rows);
@@ -1132,6 +1206,11 @@ app.get("/api/stats", async (req, res) => {
   ORDER BY total DESC
 `);
 
+const withdrawals = await query(`
+  SELECT COALESCE(SUM(amount),0)::int AS total
+  FROM cash_withdrawals
+`);
+
 res.json({
   day: day.rows[0].total,
   month: month.rows[0].total,
@@ -1139,6 +1218,8 @@ res.json({
   lowStock: low.rows[0].c,
   topProducts: top.rows,
   waitressSales: waitressSales.rows
+  withdrawals: withdrawals.rows[0].total,
+cashBalance: Number(day.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0)
 }); 
 
 });
