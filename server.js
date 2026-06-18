@@ -198,6 +198,18 @@ async function initDb() {
   `);
 
   await query(`
+  CREATE TABLE IF NOT EXISTS payment_gaps (
+    id SERIAL PRIMARY KEY,
+    invoice_id INTEGER REFERENCES invoices(id) ON DELETE CASCADE,
+    invoice_number TEXT,
+    amount INTEGER NOT NULL DEFAULT 0,
+    reason TEXT,
+    reported_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`);
+
+  await query(`
     CREATE TABLE IF NOT EXISTS cash_closings (
       id SERIAL PRIMARY KEY,
       closing_date DATE NOT NULL,
@@ -1029,6 +1041,61 @@ app.post("/api/closings", async (req, res) => {
   res.json(r.rows[0]);
 });
 
+app.post("/api/invoices/:id/gap", authMiddleware, async (req, res) => {
+  try{
+    if(!requireRole(req.user, ["admin", "cashier"])){
+      return res.status(403).json({ error:"Accès refusé" });
+    }
+
+    const amount = Number(req.body.amount);
+    const reason = String(req.body.reason || "").trim();
+
+    if(!amount || amount <= 0){
+      return res.status(400).json({ error:"Montant écart invalide" });
+    }
+
+    if(reason.length < 3){
+      return res.status(400).json({ error:"Motif obligatoire" });
+    }
+
+    const invR = await query(
+      "SELECT * FROM invoices WHERE id=$1",
+      [req.params.id]
+    );
+
+    if(!invR.rows.length){
+      return res.status(404).json({ error:"Facture introuvable" });
+    }
+
+    const inv = invR.rows[0];
+
+    const result = await query(
+      `INSERT INTO payment_gaps
+      (invoice_id, invoice_number, amount, reason, reported_by)
+      VALUES($1,$2,$3,$4,$5)
+      RETURNING *`,
+      [
+        inv.id,
+        inv.number,
+        amount,
+        reason,
+        req.user.full_name
+      ]
+    );
+
+    await addLog(
+      req.user,
+      "Écart signalé",
+      `${inv.number} / ${amount} F / ${reason}`
+    );
+
+    res.json(result.rows[0]);
+
+  }catch(err){
+    console.error(err);
+    res.status(500).json({ error:"Erreur signalement écart" });
+  }
+});
 
 app.get("/api/closings", async (req, res) => {
   const r = await query("SELECT * FROM cash_closings ORDER BY id DESC LIMIT 200");
