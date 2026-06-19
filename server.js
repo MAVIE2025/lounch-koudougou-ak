@@ -1237,26 +1237,6 @@ res.json({
   stockValue: stockValue.rows[0].total
 });
 
-const stockValue = await query(`
-  SELECT COALESCE(SUM(price * qty),0)::int AS total
-  FROM products
-`);
-
-res.json({
-  day: day.rows[0].total,
-  month: month.rows[0].total,
-  unpaid: unpaid.rows[0].c,
-  lowStock: low.rows[0].c,
-  topProducts: top.rows,
-  waitressSales: waitressSales.rows,
-  withdrawals: withdrawals.rows[0].total,
-allSales: allSales.rows[0].total,
-cashBalance: Number(allSales.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0),
-stockValue: stockValue.rows[0].total
-}); 
-
-});
-
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
