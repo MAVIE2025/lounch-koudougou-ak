@@ -318,6 +318,19 @@ if(currentUser.role === "admin"){
   withdrawalsHistoryCard.innerHTML = "";
 
 }
+if(currentUser.role === "admin"){
+  stockValueCard.innerHTML = `
+    <div class="card">
+      <h3>Recettes à venir</h3>
+      <div class="kpi">
+        Montant prévisionnel du stock
+        <b>${money(stats.stockValue)}</b>
+      </div>
+    </div>
+  `;
+}else{
+  stockValueCard.innerHTML = "";
+}
 
   stockAlerts.innerHTML = stats.lowStock > 0
     ? `<div class="alert"><b>Alerte stock :</b> ${stats.lowStock} produit(s) en seuil critique.</div>`
