@@ -1230,6 +1230,37 @@ res.json({
   topProducts: top.rows,
   waitressSales: waitressSales.rows,
   withdrawals: withdrawals.rows[0].total,
+  allSales: allSales.rows[0].total,
+  cashBalance:
+    Number(allSales.rows[0].total || 0) -
+    Number(withdrawals.rows[0].total || 0),
+  stockValue: stockValue.rows[0].total
+});
+
+const withdrawals = await query(`
+  SELECT COALESCE(SUM(amount),0)::int AS total
+  FROM cash_withdrawals
+`);
+
+const allSales = await query(`
+  SELECT COALESCE(SUM(total),0)::int AS total
+  FROM invoices
+  WHERE status='paid'
+`);
+
+const stockValue = await query(`
+  SELECT COALESCE(SUM(price * qty),0)::int AS total
+  FROM products
+`);
+
+res.json({
+  day: day.rows[0].total,
+  month: month.rows[0].total,
+  unpaid: unpaid.rows[0].c,
+  lowStock: low.rows[0].c,
+  topProducts: top.rows,
+  waitressSales: waitressSales.rows,
+  withdrawals: withdrawals.rows[0].total,
 allSales: allSales.rows[0].total,
 cashBalance: Number(allSales.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0),
 stockValue: stockValue.rows[0].total
