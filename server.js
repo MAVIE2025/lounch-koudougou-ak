@@ -1237,6 +1237,8 @@ res.json({
   stockValue: stockValue.rows[0].total
 });
 
+});
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
