@@ -1217,6 +1217,11 @@ const allSales = await query(`
   WHERE status='paid'
 `);
 
+const stockValue = await query(`
+  SELECT COALESCE(SUM(price * qty),0)::int AS total
+  FROM products
+`);
+
 res.json({
   day: day.rows[0].total,
   month: month.rows[0].total,
@@ -1226,7 +1231,8 @@ res.json({
   waitressSales: waitressSales.rows,
   withdrawals: withdrawals.rows[0].total,
 allSales: allSales.rows[0].total,
-cashBalance: Number(allSales.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0)
+cashBalance: Number(allSales.rows[0].total || 0) - Number(withdrawals.rows[0].total || 0),
+stockValue: stockValue.rows[0].total
 }); 
 
 });

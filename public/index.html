@@ -234,16 +234,14 @@ async function renderDashboard(){
   },0);
 
   stockValueCard.innerHTML = `
-    <div class="card">
-      <h3>Solde du stock</h3>
-
-      <div class="kpi">
-        Valeur totale du stock disponible
-
-        <b>${money(stockValue)}</b>
-      </div>
+  <div class="card">
+    <h3>Recettes à venir</h3>
+    <div class="kpi">
+      Montant prévisionnel du stock
+      <b>${money(stats.stockValue)}</b>
     </div>
-  `;
+  </div>
+`;
 
 }else{
 
