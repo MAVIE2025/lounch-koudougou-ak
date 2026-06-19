@@ -1237,17 +1237,6 @@ res.json({
   stockValue: stockValue.rows[0].total
 });
 
-const withdrawals = await query(`
-  SELECT COALESCE(SUM(amount),0)::int AS total
-  FROM cash_withdrawals
-`);
-
-const allSales = await query(`
-  SELECT COALESCE(SUM(total),0)::int AS total
-  FROM invoices
-  WHERE status='paid'
-`);
-
 const stockValue = await query(`
   SELECT COALESCE(SUM(price * qty),0)::int AS total
   FROM products
