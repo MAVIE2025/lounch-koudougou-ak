@@ -844,15 +844,23 @@ async function deleteTable(id){
   await refresh();
 }
 async function renderWaitressOptions(){
+
+  const selectedValue = orderWaitress.value;
+
   const res = await fetch("/api/waitresses",{
-  headers:{
-    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
-  }
-});
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  });
+
   const waitresses = await res.json();
 
   orderWaitress.innerHTML = waitresses.length
-    ? waitresses.map(w => `<option value="${w.id}">${w.full_name}</option>`).join("")
+    ? waitresses.map(w => `
+        <option value="${w.id}" ${String(selectedValue) === String(w.id) ? "selected" : ""}>
+          ${w.full_name}
+        </option>
+      `).join("")
     : `<option value="">Aucune serveuse active</option>`;
 }
 async function renderCart(){
@@ -1399,7 +1407,11 @@ async function refresh(){
     await renderUsers();
     await renderStock();
     await renderTables();
-    await renderWaitressOptions();
+
+    if(document.activeElement !== orderWaitress){
+      await renderWaitressOptions();
+    }
+
     await renderCart();
     await renderInvoices();
     await renderLogs();
@@ -1407,6 +1419,7 @@ async function refresh(){
     await renderClosings();
 
     lastRefreshAt = Date.now();
+
   }catch(err){
     console.error(err);
   }
