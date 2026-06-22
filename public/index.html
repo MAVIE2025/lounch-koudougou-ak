@@ -305,8 +305,15 @@ if(currentUser.role === "admin"){
 }
 
   stockAlerts.innerHTML = stats.lowStock > 0
-    ? `<div class="alert"><b>Alerte stock :</b> ${stats.lowStock} produit(s) en seuil critique.</div>`
-    : "";
+  ? `
+    <div class="alert">
+      <b>Alerte stock :</b> ${stats.lowStock} produit(s) en seuil critique.<br><br>
+      ${(stats.lowItems || []).map(p=>`
+        • <b>${p.name}</b> — stock ${p.qty} / seuil ${p.alert_qty}
+      `).join("<br>")}
+    </div>
+  `
+  : "";
 
   recentLogsCard.style.display = currentUser.role === "admin" ? "block" : "none";
 
@@ -1038,6 +1045,9 @@ function invoiceTable(list, paid){
             ` : `
               <button class="small success" onclick="printTicketById('${i.id}','recu')">Reçu</button>
               <button class="small warning" onclick="reportGap('${i.id}')">Écart</button>
+              ${currentUser.role === "admin" && i.status === "paid" ? `
+  <button class="small warning" onclick="editPaidInvoice('${i.id}')">Modifier</button>
+` : ""}
             `}
           </td>
         </tr>
@@ -1148,6 +1158,64 @@ async function printTicketById(id,type){
       total: it.total
     }))
   },type);
+}
+async function editPaidInvoice(id){
+  if(!requireRoles(["admin"])){
+    return alert("Accès refusé");
+  }
+
+  const allRes = await fetch("/api/invoices",{
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  });
+
+  const invoices = await allRes.json();
+  const inv = invoices.find(x => String(x.id) === String(id));
+
+  if(!inv){
+    return alert("Facture introuvable");
+  }
+
+  const tableName = prompt("Table :", inv.table_name || "");
+  if(tableName === null) return;
+
+  const paymentMode = prompt(
+    "Mode paiement : Espèces, Orange Money, Moov Money, Telecel Money",
+    inv.payment_mode || "Espèces"
+  );
+  if(paymentMode === null) return;
+
+  let amountGiven = inv.amount_given || inv.total;
+
+  if(paymentMode === "Espèces"){
+    amountGiven = Number(prompt("Montant remis :", amountGiven));
+    if(!amountGiven || amountGiven < Number(inv.total)){
+      return alert("Montant remis invalide");
+    }
+  }
+
+  const res = await fetch("/api/invoices/" + id + "/admin-edit",{
+    method:"PATCH",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    },
+    body:JSON.stringify({
+      tableName,
+      paymentMode,
+      amountGiven
+    })
+  });
+
+  const data = await res.json();
+
+  if(!res.ok){
+    return alert(data.error || "Erreur modification facture");
+  }
+
+  alert("Facture modifiée");
+  await refresh();
 }
 function printTicket(inv, type){
   const isPaid = type === "recu";

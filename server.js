@@ -1017,6 +1017,88 @@ app.post("/api/invoices/:id/cancel", async (req, res) => {
   }
 });
 
+app.patch("/api/invoices/:id/admin-edit", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const {
+      tableName,
+      waitressId,
+      paymentMode,
+      amountGiven
+    } = req.body;
+
+    const invR = await query("SELECT * FROM invoices WHERE id=$1", [req.params.id]);
+
+    if (!invR.rows.length) {
+      return res.status(404).json({ error: "Facture introuvable" });
+    }
+
+    const inv = invR.rows[0];
+
+    if (inv.status !== "paid") {
+      return res.status(400).json({ error: "Cette modification concerne uniquement les factures payées" });
+    }
+
+    let waitressName = inv.waitress_name;
+    let finalWaitressId = inv.waitress_id;
+
+    if (waitressId) {
+      const w = await query(
+        "SELECT id, full_name FROM users WHERE id=$1 AND role='waitress'",
+        [waitressId]
+      );
+
+      if (!w.rows.length) {
+        return res.status(400).json({ error: "Serveuse invalide" });
+      }
+
+      finalWaitressId = w.rows[0].id;
+      waitressName = w.rows[0].full_name;
+    }
+
+    const given = Number(amountGiven || inv.amount_given || inv.total);
+    const change = paymentMode === "Espèces"
+      ? Math.max(0, given - Number(inv.total))
+      : 0;
+
+    const result = await query(
+      `UPDATE invoices
+       SET table_name=$1,
+           waitress_id=$2,
+           waitress_name=$3,
+           payment_mode=$4,
+           amount_given=$5,
+           change_amount=$6
+       WHERE id=$7
+       RETURNING *`,
+      [
+        tableName || inv.table_name,
+        finalWaitressId,
+        waitressName,
+        paymentMode || inv.payment_mode,
+        given,
+        change,
+        req.params.id
+      ]
+    );
+
+    await addLog(
+      req.user,
+      "Modification facture payée",
+      `${inv.number} / ${inv.total} F`
+    );
+
+    res.json(result.rows[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur modification facture" });
+  }
+});
+
 app.post("/api/closings", async (req, res) => {
   const user = await getCurrentUser(req);
   if (!requireRole(user, ["admin", "cashier"])) return res.status(403).json({ error: "Accès refusé" });
@@ -1222,11 +1304,19 @@ const stockValue = await query(`
   FROM products
 `);
 
+const lowItems = await query(`
+  SELECT name, qty, alert_qty
+  FROM products
+  WHERE qty <= alert_qty
+  ORDER BY qty ASC, name ASC
+`);
+
 res.json({
   day: day.rows[0].total,
   month: month.rows[0].total,
   unpaid: unpaid.rows[0].c,
   lowStock: low.rows[0].c,
+  lowItems: lowItems.rows,
   topProducts: top.rows,
   waitressSales: waitressSales.rows,
   withdrawals: withdrawals.rows[0].total,
