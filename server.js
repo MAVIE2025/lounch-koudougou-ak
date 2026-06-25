@@ -1187,6 +1187,138 @@ app.post("/api/invoices/:id/gap", authMiddleware, async (req, res) => {
   }
 });
 
+app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const year = Number(req.query.year);
+    const type = String(req.query.type || "");
+    const month = Number(req.query.month || 0);
+    const semester = Number(req.query.semester || 0);
+
+    if (!year) {
+      return res.status(400).json({ error: "Année obligatoire" });
+    }
+
+    let startDate;
+    let endDate;
+
+    if (type === "month") {
+      if (!month || month < 1 || month > 12) {
+        return res.status(400).json({ error: "Mois invalide" });
+      }
+
+      startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      endDate = month === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    }
+
+    if (type === "semester") {
+      if (semester === 1) {
+        startDate = `${year}-01-01`;
+        endDate = `${year}-07-01`;
+      } else if (semester === 2) {
+        startDate = `${year}-07-01`;
+        endDate = `${year + 1}-01-01`;
+      } else {
+        return res.status(400).json({ error: "Semestre invalide" });
+      }
+    }
+
+    if (type === "year") {
+      startDate = `${year}-01-01`;
+      endDate = `${year + 1}-01-01`;
+    }
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: "Type de rapport invalide" });
+    }
+
+    const result = await query(
+      `
+      SELECT
+        i.number,
+        i.created_at,
+        i.paid_at,
+        i.table_name,
+        i.waitress_name,
+        i.cashier_name,
+        i.total,
+        i.status,
+        i.payment_mode,
+        i.amount_given,
+        i.change_amount
+      FROM invoices i
+      WHERE i.created_at >= $1
+      AND i.created_at < $2
+      ORDER BY i.created_at ASC
+      `,
+      [startDate, endDate]
+    );
+
+    const rows = result.rows;
+
+    const totalPaid = rows
+      .filter(r => r.status === "paid")
+      .reduce((s, r) => s + Number(r.total || 0), 0);
+
+    const totalUnpaid = rows
+      .filter(r => r.status === "unpaid")
+      .reduce((s, r) => s + Number(r.total || 0), 0);
+
+    const header = [
+      "Numero",
+      "Date creation",
+      "Date paiement",
+      "Table",
+      "Serveuse",
+      "Caissier",
+      "Total",
+      "Statut",
+      "Mode paiement",
+      "Montant remis",
+      "Monnaie"
+    ];
+
+    const csvRows = [
+      header.join(";"),
+      ...rows.map(r => [
+        r.number,
+        new Date(r.created_at).toLocaleString("fr-FR"),
+        r.paid_at ? new Date(r.paid_at).toLocaleString("fr-FR") : "",
+        r.table_name || "",
+        r.waitress_name || "",
+        r.cashier_name || "",
+        r.total || 0,
+        r.status === "paid" ? "Payée" : "Non payée",
+        r.payment_mode || "",
+        r.amount_given || 0,
+        r.change_amount || 0
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")),
+      "",
+      `"TOTAL PAYE";"${totalPaid}"`,
+      `"TOTAL NON PAYE";"${totalUnpaid}"`,
+      `"TOTAL GENERAL";"${totalPaid + totalUnpaid}"`
+    ];
+
+    const csv = "\uFEFF" + csvRows.join("\n");
+
+    const fileName = `rapport_transactions_${type}_${year}.csv`;
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+
+    res.send(csv);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur génération rapport" });
+  }
+});
+
 app.post("/api/withdrawals", authMiddleware, async (req,res)=>{
   try{
 
