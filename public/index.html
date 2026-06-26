@@ -1606,24 +1606,48 @@ reportType.onchange = function () {
 
 };
 
-function downloadTransactionsReport(){
+async function downloadTransactionsReport(){
+  if(!requireRoles(["admin"])){
+    return alert("Accès refusé");
+  }
 
-    let url =
-        "/api/reports/transactions?type=" +
-        reportType.value +
-        "&year=" +
-        reportYear.value;
+  let url =
+    "/api/reports/transactions?type=" +
+    reportType.value +
+    "&year=" +
+    reportYear.value;
 
-    if(reportType.value==="month"){
-        url += "&month="+reportMonth.value;
+  if(reportType.value === "month"){
+    url += "&month=" + reportMonth.value;
+  }
+
+  if(reportType.value === "semester"){
+    url += "&semester=" + reportSemester.value;
+  }
+
+  const res = await fetch(url,{
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
     }
+  });
 
-    if(reportType.value==="semester"){
-        url += "&semester="+reportSemester.value;
-    }
+  if(!res.ok){
+    const text = await res.text();
+    alert("Erreur téléchargement rapport : " + text);
+    return;
+  }
 
-    window.open(url,"_blank");
+  const blob = await res.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
 
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = "rapport_transactions.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  window.URL.revokeObjectURL(downloadUrl);
 }
 
 addCartLine();
