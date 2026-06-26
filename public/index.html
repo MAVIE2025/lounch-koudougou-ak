@@ -39,75 +39,50 @@
 <div id="cashBalanceCard"></div>
 <div id="withdrawalsHistoryCard"></div>
 </section>
-
 <section id="reports" class="section">
+  <div class="card">
+    <h3>Rapports Excel</h3>
 
-    <div class="card">
-        <h2>Rapports Excel</h2>
+    <label>Type de rapport</label>
+    <select id="reportType">
+      <option value="month">Mensuel</option>
+      <option value="semester">Semestriel</option>
+      <option value="year">Annuel</option>
+    </select>
 
-        <label>Type de rapport</label>
-        <select id="reportType">
-            <option value="month">Mensuel</option>
-            <option value="semester">Semestriel</option>
-            <option value="year">Annuel</option>
-        </select>
+    <label>Année</label>
+    <input id="reportYear" type="number" value="2026">
 
-        <br><br>
-
-        <label>Année</label>
-        <input
-            id="reportYear"
-            type="number"
-            value="2026"
-        >
-
-        <br><br>
-
-        <div id="monthContainer">
-
-            <label>Mois</label>
-
-            <select id="reportMonth">
-                <option value="1">Janvier</option>
-                <option value="2">Février</option>
-                <option value="3">Mars</option>
-                <option value="4">Avril</option>
-                <option value="5">Mai</option>
-                <option value="6">Juin</option>
-                <option value="7">Juillet</option>
-                <option value="8">Août</option>
-                <option value="9">Septembre</option>
-                <option value="10">Octobre</option>
-                <option value="11">Novembre</option>
-                <option value="12">Décembre</option>
-            </select>
-
-        </div>
-
-        <div id="semesterContainer" style="display:none">
-
-            <label>Semestre</label>
-
-            <select id="reportSemester">
-                <option value="1">Janvier → Juin</option>
-                <option value="2">Juillet → Décembre</option>
-            </select>
-
-        </div>
-
-        <br>
-
-        <button onclick="downloadTransactionsReport()">
-            Télécharger le rapport Excel
-        </button>
-
+    <div id="monthContainer">
+      <label>Mois</label>
+      <select id="reportMonth">
+        <option value="1">Janvier</option>
+        <option value="2">Février</option>
+        <option value="3">Mars</option>
+        <option value="4">Avril</option>
+        <option value="5">Mai</option>
+        <option value="6">Juin</option>
+        <option value="7">Juillet</option>
+        <option value="8">Août</option>
+        <option value="9">Septembre</option>
+        <option value="10">Octobre</option>
+        <option value="11">Novembre</option>
+        <option value="12">Décembre</option>
+      </select>
     </div>
 
+    <div id="semesterContainer" style="display:none">
+      <label>Semestre</label>
+      <select id="reportSemester">
+        <option value="1">Janvier à Juin</option>
+        <option value="2">Juillet à Décembre</option>
+      </select>
+    </div>
+
+    <br>
+    <button onclick="downloadTransactionsReport()">Télécharger rapport Excel</button>
+  </div>
 </section>
-
-
-
-<section id="users"
 <section id="users" class="section"><div class="card"><h3 id="userFormTitle">Créer un utilisateur</h3><input id="editingUserId" type="hidden"><div class="grid-3"><div><label>Nom complet</label><input id="userFullName"></div><div><label>Nom utilisateur</label><input id="userName"></div><div><label>Rôle</label><select id="userRole"><option value="admin">Admin</option><option value="cashier">Caissier</option><option value="waitress">Serveuse</option><option value="storekeeper">Magasinier</option></select></div></div><label>Mot de passe</label><input id="userPassword" type="text"><div class="grid-2"><button onclick="saveUser()">Enregistrer utilisateur</button><button class="secondary" onclick="resetUserForm()">Annuler / Nouveau</button></div></div><div class="card"><h3>Liste utilisateurs</h3><div id="usersTable"></div></div></section>
 <section id="stock" class="section"><div class="card"><h3>Créer / renseigner un item stock</h3><div class="grid-3"><div><label>Nom item</label><input id="productName" list="productList" placeholder="Ex: Brakina 65cl" oninput="prefillExistingProduct()"><datalist id="productList"></datalist></div><div><label>Catégorie</label><input id="productCategory" list="categoryList" placeholder="Boisson, plat..."><datalist id="categoryList"></datalist></div><div><label>Prix vente</label><input id="productPrice" type="number" min="0"></div><div><label>Quantité</label><input id="productQty" type="number" min="0"></div><div><label>Seuil alerte</label><input id="productAlert" type="number" min="0"></div><div><label>Photo bordereau livraison</label><input id="deliveryPhoto" type="file" accept="image/*"></div></div><button onclick="saveProduct()">Enregistrer stock</button></div><div class="card"><h3>Recherche stock</h3><input id="stockSearch" placeholder="Rechercher produit ou catégorie" oninput="renderStock()"></div><div class="card"><h3>Stock actuel</h3><div id="stockTable"></div></div><div class="card"><h3>Historique détaillé du stock</h3><div id="stockHistoryTable"></div></div></section>
 <section id="orders" class="section"><div class="card"><h3>Nouvelle commande</h3><div class="grid-2"><div><label>Table</label><select id="orderTable"></select></div><div><label>Serveuse assignée</label><select id="orderWaitress"></select></div></div><div id="cartLines"></div><button class="secondary" onclick="addCartLine()">+ Ajouter une ligne</button><h3>Total : <span id="cartTotal">0 F</span></h3><button onclick="createInvoice()">Générer facture non payée</button></div></section>
@@ -1608,6 +1583,48 @@ function initReportForm(){
 }
 
 initReportForm();
+
+const reportType = document.getElementById("reportType");
+const reportYear = document.getElementById("reportYear");
+const reportMonth = document.getElementById("reportMonth");
+const reportSemester = document.getElementById("reportSemester");
+
+const monthContainer = document.getElementById("monthContainer");
+const semesterContainer = document.getElementById("semesterContainer");
+
+reportType.onchange = function () {
+
+    monthContainer.style.display =
+        reportType.value === "month"
+            ? "block"
+            : "none";
+
+    semesterContainer.style.display =
+        reportType.value === "semester"
+            ? "block"
+            : "none";
+
+};
+
+function downloadTransactionsReport(){
+
+    let url =
+        "/api/reports/transactions?type=" +
+        reportType.value +
+        "&year=" +
+        reportYear.value;
+
+    if(reportType.value==="month"){
+        url += "&month="+reportMonth.value;
+    }
+
+    if(reportType.value==="semester"){
+        url += "&semester="+reportSemester.value;
+    }
+
+    window.open(url,"_blank");
+
+}
 
 addCartLine();
 restoreSession();
