@@ -1540,57 +1540,67 @@ async function withdrawCash(){
   await refresh();
 }
 
-function downloadTransactionsReport(){
+async function downloadTransactionsReport(){
+  const type = document.getElementById("reportType");
+  const year = document.getElementById("reportYear");
+  const month = document.getElementById("reportMonth");
+  const semester = document.getElementById("reportSemester");
 
   if(!requireRoles(["admin"])){
     return alert("Accès refusé");
   }
 
-  let url =
-    "/api/reports/transactions?type=" +
-    reportType.value +
-    "&year=" +
-    reportYear.value;
+  let url = "/api/reports/transactions?type=" + type.value + "&year=" + year.value;
 
-  if(reportType.value === "month"){
-    url += "&month=" + reportMonth.value;
+  if(type.value === "month"){
+    url += "&month=" + month.value;
   }
 
-  if(reportType.value === "semester"){
-    url += "&semester=" + reportSemester.value;
+  if(type.value === "semester"){
+    url += "&semester=" + semester.value;
   }
 
-  window.open(url, "_blank");
+  const res = await fetch(url,{
+    headers:{
+      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
+    }
+  });
+
+  if(!res.ok){
+    const txt = await res.text();
+    console.log(txt);
+    return alert("Erreur téléchargement");
+  }
+
+  const blob = await res.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = "rapport_transactions.csv";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  URL.revokeObjectURL(downloadUrl);
 }
 
 function initReportForm(){
-  if(!document.getElementById("reportType")) return;
+  const type = document.getElementById("reportType");
+  const monthBox = document.getElementById("monthContainer");
+  const semesterBox = document.getElementById("semesterContainer");
 
-  reportType.onchange = () => {
+  if(!type || !monthBox || !semesterBox) return;
 
-    monthContainer.style.display =
-      reportType.value === "month"
-        ? "block"
-        : "none";
-
-    semesterContainer.style.display =
-      reportType.value === "semester"
-        ? "block"
-        : "none";
+  type.onchange = () => {
+    monthBox.style.display = type.value === "month" ? "block" : "none";
+    semesterBox.style.display = type.value === "semester" ? "block" : "none";
   };
 
-  reportType.onchange();
+  type.onchange();
 }
 
 initReportForm();
-
-const reportType = document.getElementById("reportType");
-const reportYear = document.getElementById("reportYear");
-const reportMonth = document.getElementById("reportMonth");
-const reportSemester = document.getElementById("reportSemester");
-
-const monthContainer = document.getElementById("monthContainer");
-const semesterContainer = document.getElementById("semesterContainer");
 
 reportType.onchange = function () {
 
@@ -1605,50 +1615,6 @@ reportType.onchange = function () {
             : "none";
 
 };
-
-async function downloadTransactionsReport(){
-  if(!requireRoles(["admin"])){
-    return alert("Accès refusé");
-  }
-
-  let url =
-    "/api/reports/transactions?type=" +
-    reportType.value +
-    "&year=" +
-    reportYear.value;
-
-  if(reportType.value === "month"){
-    url += "&month=" + reportMonth.value;
-  }
-
-  if(reportType.value === "semester"){
-    url += "&semester=" + reportSemester.value;
-  }
-
-  const res = await fetch(url,{
-    headers:{
-      "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
-    }
-  });
-
-  if(!res.ok){
-    const text = await res.text();
-    alert("Erreur téléchargement rapport : " + text);
-    return;
-  }
-
-  const blob = await res.blob();
-  const downloadUrl = window.URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = downloadUrl;
-  a.download = "rapport_transactions.csv";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  window.URL.revokeObjectURL(downloadUrl);
-}
 
 addCartLine();
 restoreSession();
