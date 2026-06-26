@@ -1420,6 +1420,18 @@ app.get("/api/stats", async (req, res) => {
   ORDER BY total DESC
 `);
 
+const waitressItems = await query(`
+  SELECT
+    i.waitress_name,
+    ii.product_name,
+    SUM(ii.qty)::int AS qty
+  FROM invoice_items ii
+  JOIN invoices i ON i.id = ii.invoice_id
+  WHERE i.status = 'paid'
+  GROUP BY i.waitress_name, ii.product_name
+  ORDER BY i.waitress_name ASC, qty DESC
+`);
+
 const withdrawals = await query(`
   SELECT COALESCE(SUM(amount),0)::int AS total
   FROM cash_withdrawals
@@ -1452,6 +1464,7 @@ res.json({
   topProducts: top.rows,
   waitressSales: waitressSales.rows,
   withdrawals: withdrawals.rows[0].total,
+  waitressItems: waitressItems.rows,
   allSales: allSales.rows[0].total,
   cashBalance:
     Number(allSales.rows[0].total || 0) -
@@ -1459,6 +1472,129 @@ res.json({
   stockValue: stockValue.rows[0].total
 });
 
+});
+
+app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
+  try {
+    if (!requireRole(req.user, ["admin"])) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    const year = Number(req.query.year);
+    const type = String(req.query.type || "");
+    const month = Number(req.query.month || 0);
+    const semester = Number(req.query.semester || 0);
+
+    if (!year) {
+      return res.status(400).json({ error: "Année obligatoire" });
+    }
+
+    let startDate;
+    let endDate;
+
+    if (type === "month") {
+      startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      endDate = month === 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    } else if (type === "semester") {
+      if (semester === 1) {
+        startDate = `${year}-01-01`;
+        endDate = `${year}-07-01`;
+      } else {
+        startDate = `${year}-07-01`;
+        endDate = `${year + 1}-01-01`;
+      }
+    } else if (type === "year") {
+      startDate = `${year}-01-01`;
+      endDate = `${year + 1}-01-01`;
+    } else {
+      return res.status(400).json({ error: "Type invalide" });
+    }
+
+    const result = await query(
+      `
+      SELECT
+        number,
+        created_at,
+        paid_at,
+        table_name,
+        waitress_name,
+        cashier_name,
+        total,
+        status,
+        payment_mode,
+        amount_given,
+        change_amount
+      FROM invoices
+      WHERE created_at >= $1
+        AND created_at < $2
+      ORDER BY created_at ASC
+      `,
+      [startDate, endDate]
+    );
+
+    const rows = result.rows;
+
+    const totalPaid = rows
+      .filter(r => r.status === "paid")
+      .reduce((s, r) => s + Number(r.total || 0), 0);
+
+    const totalUnpaid = rows
+      .filter(r => r.status === "unpaid")
+      .reduce((s, r) => s + Number(r.total || 0), 0);
+
+    const csvRows = [];
+
+    csvRows.push([
+      "Numéro",
+      "Date création",
+      "Date paiement",
+      "Table",
+      "Serveuse",
+      "Caissier",
+      "Total",
+      "Statut",
+      "Mode paiement",
+      "Montant remis",
+      "Monnaie"
+    ].join(";"));
+
+    rows.forEach(r => {
+      csvRows.push([
+        r.number,
+        r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "",
+        r.paid_at ? new Date(r.paid_at).toLocaleString("fr-FR") : "",
+        r.table_name || "",
+        r.waitress_name || "",
+        r.cashier_name || "",
+        r.total || 0,
+        r.status === "paid" ? "Payée" : "Non payée",
+        r.payment_mode || "",
+        r.amount_given || 0,
+        r.change_amount || 0
+      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
+    });
+
+    csvRows.push("");
+    csvRows.push(`"TOTAL PAYÉ";"${totalPaid}"`);
+    csvRows.push(`"TOTAL NON PAYÉ";"${totalUnpaid}"`);
+    csvRows.push(`"TOTAL GÉNÉRAL";"${totalPaid + totalUnpaid}"`);
+
+    const csv = "\uFEFF" + csvRows.join("\n");
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="rapport_transactions_${type}_${year}.csv"`
+    );
+
+    res.send(csv);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erreur génération rapport" });
+  }
 });
 
 app.get("*", (req, res) => {
