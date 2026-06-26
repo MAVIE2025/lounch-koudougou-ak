@@ -5,6 +5,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const { Pool } = require("pg");
+const ExcelJS = require("exceljs");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1198,80 +1199,72 @@ app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
     const month = Number(req.query.month || 0);
     const semester = Number(req.query.semester || 0);
 
-    if (!year) {
-      return res.status(400).json({ error: "Année obligatoire" });
-    }
-
     let startDate;
     let endDate;
+    let periodLabel = "";
 
     if (type === "month") {
-      if (!month || month < 1 || month > 12) {
-        return res.status(400).json({ error: "Mois invalide" });
-      }
-
       startDate = `${year}-${String(month).padStart(2, "0")}-01`;
       endDate = month === 12
         ? `${year + 1}-01-01`
         : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    }
-
-    if (type === "semester") {
+      periodLabel = `Mois ${month}/${year}`;
+    } else if (type === "semester") {
       if (semester === 1) {
         startDate = `${year}-01-01`;
         endDate = `${year}-07-01`;
-      } else if (semester === 2) {
+        periodLabel = `Janvier à Juin ${year}`;
+      } else {
         startDate = `${year}-07-01`;
         endDate = `${year + 1}-01-01`;
-      } else {
-        return res.status(400).json({ error: "Semestre invalide" });
+        periodLabel = `Juillet à Décembre ${year}`;
       }
-    }
-
-    if (type === "year") {
+    } else if (type === "year") {
       startDate = `${year}-01-01`;
       endDate = `${year + 1}-01-01`;
+      periodLabel = `Année ${year}`;
+    } else {
+      return res.status(400).json({ error: "Type invalide" });
     }
 
-    if (!startDate || !endDate) {
-      return res.status(400).json({ error: "Type de rapport invalide" });
-    }
-
-    const result = await query(
-      `
+    const result = await query(`
       SELECT
-        i.number,
-        i.created_at,
-        i.paid_at,
-        i.table_name,
-        i.waitress_name,
-        i.cashier_name,
-        i.total,
-        i.status,
-        i.payment_mode,
-        i.amount_given,
-        i.change_amount
-      FROM invoices i
-      WHERE i.created_at >= $1
-      AND i.created_at < $2
-      ORDER BY i.created_at ASC
-      `,
-      [startDate, endDate]
-    );
+        number,
+        created_at,
+        paid_at,
+        table_name,
+        waitress_name,
+        cashier_name,
+        total,
+        status,
+        payment_mode,
+        amount_given,
+        change_amount
+      FROM invoices
+      WHERE created_at >= $1
+        AND created_at < $2
+      ORDER BY created_at ASC
+    `, [startDate, endDate]);
 
     const rows = result.rows;
 
-    const totalPaid = rows
-      .filter(r => r.status === "paid")
-      .reduce((s, r) => s + Number(r.total || 0), 0);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Transactions");
 
-    const totalUnpaid = rows
-      .filter(r => r.status === "unpaid")
-      .reduce((s, r) => s + Number(r.total || 0), 0);
+    sheet.mergeCells("A1:K1");
+    sheet.getCell("A1").value = "LE DOMAINE - RAPPORT DES TRANSACTIONS";
+    sheet.getCell("A1").font = { bold: true, size: 16 };
+    sheet.getCell("A1").alignment = { horizontal: "center" };
 
-    const header = [
-      "Numero",
-      "Date creation",
+    sheet.mergeCells("A2:K2");
+    sheet.getCell("A2").value = periodLabel;
+    sheet.getCell("A2").alignment = { horizontal: "center" };
+
+    sheet.addRow([]);
+
+    sheet.addRow([
+      "Numéro",
+      "Date création",
       "Date paiement",
       "Table",
       "Serveuse",
@@ -1281,41 +1274,59 @@ app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
       "Mode paiement",
       "Montant remis",
       "Monnaie"
-    ];
+    ]);
 
-    const csvRows = [
-      header.join(";"),
-      ...rows.map(r => [
+    rows.forEach(r => {
+      sheet.addRow([
         r.number,
-        new Date(r.created_at).toLocaleString("fr-FR"),
+        r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "",
         r.paid_at ? new Date(r.paid_at).toLocaleString("fr-FR") : "",
         r.table_name || "",
         r.waitress_name || "",
         r.cashier_name || "",
-        r.total || 0,
+        Number(r.total || 0),
         r.status === "paid" ? "Payée" : "Non payée",
         r.payment_mode || "",
-        r.amount_given || 0,
-        r.change_amount || 0
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")),
-      "",
-      `"TOTAL PAYE";"${totalPaid}"`,
-      `"TOTAL NON PAYE";"${totalUnpaid}"`,
-      `"TOTAL GENERAL";"${totalPaid + totalUnpaid}"`
-    ];
+        Number(r.amount_given || 0),
+        Number(r.change_amount || 0)
+      ]);
+    });
 
-    const csv = "\uFEFF" + csvRows.join("\n");
+    const totalPaid = rows
+      .filter(r => r.status === "paid")
+      .reduce((s, r) => s + Number(r.total || 0), 0);
 
-    const fileName = `rapport_transactions_${type}_${year}.csv`;
+    const totalUnpaid = rows
+      .filter(r => r.status === "unpaid")
+      .reduce((s, r) => s + Number(r.total || 0), 0);
 
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    sheet.addRow([]);
+    sheet.addRow(["TOTAL PAYÉ", totalPaid]);
+    sheet.addRow(["TOTAL NON PAYÉ", totalUnpaid]);
+    sheet.addRow(["TOTAL GÉNÉRAL", totalPaid + totalUnpaid]);
 
-    res.send(csv);
+    sheet.columns.forEach(col => {
+      col.width = 18;
+    });
+
+    sheet.getRow(4).font = { bold: true };
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="rapport_transactions_${type}_${year}.xlsx"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Erreur génération rapport" });
+    res.status(500).json({ error: "Erreur génération rapport Excel" });
   }
 });
 
