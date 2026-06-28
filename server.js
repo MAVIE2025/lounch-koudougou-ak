@@ -909,7 +909,19 @@ app.post("/api/invoices", authMiddleware, async (req, res) => {
     }
 
     const count = await client.query("SELECT COUNT(*)::int AS c FROM invoices");
-    const number = "FAC-" + String(count.rows[0].c + 1).padStart(5, "0");
+    const lastInvoice = await query(`
+    SELECT number
+    FROM invoices
+    WHERE number LIKE 'FAC-%'
+    ORDER BY CAST(REPLACE(number,'FAC-','') AS INTEGER) DESC
+    LIMIT 1
+`);
+
+const lastNumber = lastInvoice.rows.length
+    ? Number(lastInvoice.rows[0].number.replace("FAC-",""))
+    : 0;
+
+const number = "FAC-" + String(lastNumber + 1).padStart(5,"0");
 
     const inv = await client.query(
       `INSERT INTO invoices(number,table_name,waitress_id,waitress_name,cashier_id,cashier_name,total,status)
