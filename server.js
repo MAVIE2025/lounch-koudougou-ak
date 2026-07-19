@@ -21,6 +21,12 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL.includes("railway") ? { rejectUnauthorized: false } : false,
 });
 
+// Sans ce listener, une coupure de connexion inactive (ex: proxy Railway)
+// remonte un evenement 'error' non gere et fait planter tout le processus Node.
+pool.on("error", (err) => {
+  console.error("Erreur inattendue sur une connexion PG inactive:", err.message);
+});
+
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "public")));
