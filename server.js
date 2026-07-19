@@ -21,8 +21,8 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL.includes("railway") ? { rejectUnauthorized: false } : false,
 });
 
-// Sans ce listener, une coupure de connexion inactive (ex: proxy Railway)
-// remonte un evenement 'error' non gere et fait planter tout le processus Node.
+// Evite qu'une connexion inactive coupee (ex: proxy Railway) ne fasse
+// planter tout le process via un evenement 'error' non gere.
 pool.on("error", (err) => {
   console.error("Erreur inattendue sur une connexion PG inactive:", err.message);
 });
@@ -33,6 +33,10 @@ app.use(express.static(path.join(__dirname, "public")));
 
 async function query(sql, params = []) {
   const client = await pool.connect();
+  // Idem pour une connexion active coupee pendant une requete en cours.
+  client.on("error", (err) => {
+    console.error("Erreur inattendue sur une connexion PG active:", err.message);
+  });
   try {
     return await client.query(sql, params);
   } finally {
@@ -291,7 +295,7 @@ app.put("/api/users/:id", authMiddleware, async (req, res) => {
     if (password && password.trim()) {
       const passwordHash = await bcrypt.hash(password, 10);
       sql = `
-        UPDATE users 
+        UPDATE users
         SET full_name=$1, username=$2, password_hash=$3, plain_password=$4, role=$5, active=$6
         WHERE id=$7
         RETURNING id, full_name, username, plain_password, role, active
@@ -299,7 +303,7 @@ app.put("/api/users/:id", authMiddleware, async (req, res) => {
       params = [fullName, username, passwordHash, password, role, active, req.params.id];
     } else {
       sql = `
-        UPDATE users 
+        UPDATE users
         SET full_name=$1, username=$2, role=$3, active=$4
         WHERE id=$5
         RETURNING id, full_name, username, plain_password, role, active
@@ -385,9 +389,9 @@ app.patch("/api/users/:id/toggle", authMiddleware, async (req, res) => {
     }
 
     const result = await query(
-      `UPDATE users 
-       SET active = NOT active 
-       WHERE id=$1 
+      `UPDATE users
+       SET active = NOT active
+       WHERE id=$1
        RETURNING id, full_name, username, plain_password, role, active`,
       [req.params.id]
     );
@@ -753,7 +757,7 @@ app.post("/api/products", authMiddleware, async (req, res) => {
     const after = before + Number(qty);
 
     const r = await query(
-      `UPDATE products 
+      `UPDATE products
        SET category=$1, price=$2, qty=$3, alert_qty=$4, delivery_photo=COALESCE($5, delivery_photo), updated_by=$6, updated_at=NOW()
        WHERE id=$7 RETURNING *`,
       [
@@ -853,8 +857,8 @@ app.delete("/api/tables/:id", authMiddleware, async (req, res) => {
 app.get("/api/waitresses", async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, full_name, username, role, active 
-       FROM users 
+      `SELECT id, full_name, username, role, active
+       FROM users
        WHERE role='waitress' AND active=true
        ORDER BY full_name ASC`
     );
@@ -895,6 +899,9 @@ app.post("/api/invoices", authMiddleware, async (req, res) => {
   if (w.rowCount === 0) return res.status(400).json({ error: "Serveuse invalide" });
 
   const client = await pool.connect();
+  client.on("error", (err) => {
+    console.error("Erreur inattendue sur une connexion PG active:", err.message);
+  });
 
   try {
     await client.query("BEGIN");
@@ -996,6 +1003,9 @@ app.post("/api/invoices/:id/cancel", async (req, res) => {
   if (reason.length < 3) return res.status(400).json({ error: "Motif obligatoire" });
 
   const client = await pool.connect();
+  client.on("error", (err) => {
+    console.error("Erreur inattendue sur une connexion PG active:", err.message);
+  });
 
   try {
     await client.query("BEGIN");
@@ -1610,7 +1620,7 @@ app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
     csvRows.push(`"TOTAL NON PAYÉ";"${totalUnpaid}"`);
     csvRows.push(`"TOTAL GÉNÉRAL";"${totalPaid + totalUnpaid}"`);
 
-    const csv = "\uFEFF" + csvRows.join("\n");
+    const csv = "﻿" + csvRows.join("\n");
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
