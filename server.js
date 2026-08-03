@@ -140,20 +140,63 @@ async function initDb() {
   `);
 
   await query(`
-    CREATE TABLE IF NOT EXISTS products (
-      id SERIAL PRIMARY KEY,
-      name TEXT UNIQUE NOT NULL,
-      category TEXT NOT NULL,
-      price INTEGER NOT NULL DEFAULT 0,
-      qty INTEGER NOT NULL DEFAULT 0,
-      alert_qty INTEGER NOT NULL DEFAULT 0,
-      delivery_photo TEXT,
-      created_by TEXT,
-      updated_by TEXT,
-      created_at TIMESTAMP DEFAULT NOW(),
-      updated_at TIMESTAMP DEFAULT NOW()
-    );
+    CCREATE TABLE IF NOT EXISTS products (
+    id SERIAL PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    category TEXT NOT NULL,
+
+    type_stock TEXT NOT NULL DEFAULT 'BOISSON'
+      CHECK(type_stock IN ('BOISSON', 'NOURRITURE')),
+
+    price INTEGER NOT NULL DEFAULT 0,
+    qty INTEGER NOT NULL DEFAULT 0,
+    alert_qty INTEGER NOT NULL DEFAULT 0,
+    delivery_photo TEXT,
+    created_by TEXT,
+    updated_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
   `);
+
+  await query(`
+  ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS type_stock TEXT;
+`);
+
+await query(`
+  UPDATE products
+  SET type_stock = 'BOISSON'
+  WHERE type_stock IS NULL;
+`);
+
+await query(`
+  ALTER TABLE products
+  ALTER COLUMN type_stock SET DEFAULT 'BOISSON';
+`);
+
+await query(`
+  ALTER TABLE products
+  ALTER COLUMN type_stock SET NOT NULL;
+`);
+
+
+await query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'products_type_stock_check'
+    ) THEN
+      ALTER TABLE products
+      ADD CONSTRAINT products_type_stock_check
+      CHECK(type_stock IN ('BOISSON', 'NOURRITURE'));
+    END IF;
+  END
+  $$;
+`);
+
 
   await query(`
     CREATE TABLE IF NOT EXISTS stock_history (
@@ -196,17 +239,65 @@ async function initDb() {
     );
   `);
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS invoice_items (
-      id SERIAL PRIMARY KEY,
-      invoice_id INTEGER REFERENCES invoices(id) ON DELETE CASCADE,
-      product_id INTEGER,
-      product_name TEXT NOT NULL,
-      qty INTEGER NOT NULL,
-      price INTEGER NOT NULL,
-      total INTEGER NOT NULL
-    );
-  `);
+ await query(`
+  CREATE TABLE IF NOT EXISTS invoice_items (
+    id SERIAL PRIMARY KEY,
+    invoice_id INTEGER REFERENCES invoices(id) ON DELETE CASCADE,
+    product_id INTEGER,
+    product_name TEXT NOT NULL,
+
+    type_stock TEXT NOT NULL DEFAULT 'BOISSON'
+      CHECK(type_stock IN ('BOISSON', 'NOURRITURE')),
+
+    qty INTEGER NOT NULL,
+    price INTEGER NOT NULL,
+    total INTEGER NOT NULL
+  );
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS type_stock TEXT;
+`);
+
+await query(`
+  UPDATE invoice_items
+  SET type_stock = COALESCE(
+    (
+      SELECT p.type_stock
+      FROM products p
+      WHERE p.id = invoice_items.product_id
+    ),
+    'BOISSON'
+  )
+  WHERE type_stock IS NULL;
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ALTER COLUMN type_stock SET DEFAULT 'BOISSON';
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ALTER COLUMN type_stock SET NOT NULL;
+`);
+
+await query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'invoice_items_type_stock_check'
+    ) THEN
+      ALTER TABLE invoice_items
+      ADD CONSTRAINT invoice_items_type_stock_check
+      CHECK(type_stock IN ('BOISSON', 'NOURRITURE'));
+    END IF;
+  END
+  $$;
+`);
 
   await query(`
   CREATE TABLE IF NOT EXISTS payment_gaps (
