@@ -140,7 +140,7 @@ async function initDb() {
   `);
 
   await query(`
-    CCREATE TABLE IF NOT EXISTS products (
+    CREATE TABLE IF NOT EXISTS products (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     category TEXT NOT NULL,
