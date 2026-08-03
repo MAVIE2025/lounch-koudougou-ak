@@ -951,94 +951,172 @@ async function renderWaitressOptions(){
       `).join("")
     : `<option value="">Aucune serveuse active</option>`;
 }
+
 async function renderCart(){
 
   if(!backendProducts.length){
+
     const res = await fetch("/api/products",{
-  headers:{
-    "Authorization":"Bearer " + sessionStorage.getItem("lounch_token")
-  }
-});
+      headers:{
+        "Authorization":"Bearer " +
+          sessionStorage.getItem("lounch_token")
+      }
+    });
+
     backendProducts = await res.json();
   }
 
   if(cart.length === 0){
     addCartLine();
+    return;
   }
+
+  const boissons = backendProducts.filter(
+    p => p.type_stock === "BOISSON"
+  );
+
+  const nourritures = backendProducts.filter(
+    p => p.type_stock === "NOURRITURE"
+  );
 
   cartLines.innerHTML = cart.map((line,i)=>{
 
-    const p = backendProducts.find(x => String(x.id) === String(line.productId));
+    const produitSelectionne = backendProducts.find(
+      p => String(p.id) === String(line.productId)
+    );
 
-    const total = p
-      ? Number(p.price) * Number(line.qty || 0)
+    const total = produitSelectionne
+      ? Number(produitSelectionne.price) * Number(line.qty || 0)
       : 0;
 
+    const typeSelectionne =
+      produitSelectionne?.type_stock || "";
+
     return `
-      <div class="cart-line">
+      <div class="card" style="padding:12px;margin-bottom:10px">
 
-        <div>
-          <label>Produit</label>
+        <div class="grid-2">
 
-          <select onchange="cart[${i}].productId=this.value;renderCart()">
+          <div>
+            <label>Boisson</label>
 
-            <option value="">Choisir...</option>
+            <select
+              onchange="
+                cart[${i}].productId = this.value;
+                renderCart();
+              "
+            >
+              <option value="">Choisir une boisson...</option>
 
-            ${backendProducts.map(prod=>`
+              ${boissons.map(prod=>`
+                <option
+                  value="${prod.id}"
+                  ${
+                    typeSelectionne === "BOISSON" &&
+                    String(line.productId) === String(prod.id)
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  ${prod.name}
+                  — stock ${prod.qty}
+                  — ${money(prod.price)}
+                </option>
+              `).join("")}
 
-              <option
-                value="${prod.id}"
-                ${String(line.productId)===String(prod.id) ? "selected" : ""}
-              >
+            </select>
+          </div>
 
-                ${prod.name} — stock ${prod.qty} — ${money(prod.price)}
+          <div>
+            <label>Plat / nourriture</label>
 
-              </option>
+            <select
+              onchange="
+                cart[${i}].productId = this.value;
+                renderCart();
+              "
+            >
+              <option value="">Choisir un plat...</option>
 
-            `).join("")}
+              ${nourritures.map(prod=>`
+                <option
+                  value="${prod.id}"
+                  ${
+                    typeSelectionne === "NOURRITURE" &&
+                    String(line.productId) === String(prod.id)
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  ${prod.name}
+                  — stock ${prod.qty}
+                  — ${money(prod.price)}
+                </option>
+              `).join("")}
 
-          </select>
+            </select>
+          </div>
+
         </div>
 
-        <div>
-          <label>Qté</label>
+        <div class="grid-3" style="margin-top:10px">
 
-          <input
-            type="number"
-            min="1"
-            value="${line.qty}"
-            onchange="cart[${i}].qty=Number(this.value);renderCart()"
-          >
+          <div>
+            <label>Quantité</label>
+
+            <input
+              type="number"
+              min="1"
+              value="${line.qty || 1}"
+              onchange="
+                cart[${i}].qty = Number(this.value);
+                renderCart();
+              "
+            >
+          </div>
+
+          <div>
+            <label>Total</label>
+            <input disabled value="${money(total)}">
+          </div>
+
+          <div>
+            <label>Action</label>
+
+            <button
+              class="danger"
+              onclick="removeCartLine(${i})"
+            >
+              Retirer la ligne
+            </button>
+          </div>
+
         </div>
-
-        <div>
-          <label>Total</label>
-          <input disabled value="${money(total)}">
-        </div>
-
-        <button
-          class="small danger"
-          onclick="removeCartLine(${i})"
-        >
-          X
-        </button>
 
       </div>
     `;
+
   }).join("");
 
-  const totalGeneral = cart.reduce((sum,line)=>{
+  const totalGeneral = cart.reduce((somme,line)=>{
 
-    const p = backendProducts.find(x => String(x.id) === String(line.productId));
+    const produit = backendProducts.find(
+      p => String(p.id) === String(line.productId)
+    );
 
-    if(!p) return sum;
+    if(!produit){
+      return somme;
+    }
 
-    return sum + (Number(p.price) * Number(line.qty || 0));
+    return somme +
+      Number(produit.price) *
+      Number(line.qty || 0);
 
   },0);
 
   cartTotal.textContent = money(totalGeneral);
 }
+
 async function createInvoice(){
   if(!requireRoles(["admin","cashier"])) return alert("Accès refusé");
 
