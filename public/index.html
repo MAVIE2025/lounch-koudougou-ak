@@ -84,7 +84,14 @@
   </div>
 </section>
 <section id="users" class="section"><div class="card"><h3 id="userFormTitle">Créer un utilisateur</h3><input id="editingUserId" type="hidden"><div class="grid-3"><div><label>Nom complet</label><input id="userFullName"></div><div><label>Nom utilisateur</label><input id="userName"></div><div><label>Rôle</label><select id="userRole"><option value="admin">Admin</option><option value="cashier">Caissier</option><option value="waitress">Serveuse</option><option value="storekeeper">Magasinier</option></select></div></div><label>Mot de passe</label><input id="userPassword" type="text"><div class="grid-2"><button onclick="saveUser()">Enregistrer utilisateur</button><button class="secondary" onclick="resetUserForm()">Annuler / Nouveau</button></div></div><div class="card"><h3>Liste utilisateurs</h3><div id="usersTable"></div></div></section>
-<section id="stock" class="section"><div class="card"><h3>Créer / renseigner un item stock</h3><div class="grid-3"><div><label>Nom item</label><input id="productName" list="productList" placeholder="Ex: Brakina 65cl" oninput="prefillExistingProduct()"><datalist id="productList"></datalist></div><div><label>Catégorie</label><input id="productCategory" list="categoryList" placeholder="Boisson, plat..."><datalist id="categoryList"></datalist></div><div><label>Prix vente</label><input id="productPrice" type="number" min="0"></div><div><label>Quantité</label><input id="productQty" type="number" min="0"></div><div><label>Seuil alerte</label><input id="productAlert" type="number" min="0"></div><div><label>Photo bordereau livraison</label><input id="deliveryPhoto" type="file" accept="image/*"></div></div><button onclick="saveProduct()">Enregistrer stock</button></div><div class="card"><h3>Recherche stock</h3><input id="stockSearch" placeholder="Rechercher produit ou catégorie" oninput="renderStock()"></div><div class="card"><h3>Stock actuel</h3><div id="stockTable"></div></div><div class="card"><h3>Historique détaillé du stock</h3><div id="stockHistoryTable"></div></div></section>
+<section id="stock" class="section"><div class="card"><h3>Créer / renseigner un item stock</h3><div class="grid-3"><div><label>Nom item</label><input id="productName" list="productList" placeholder="Ex: Brakina 65cl" oninput="prefillExistingProduct()"><datalist id="productList"></datalist></div><div>
+    <label>Type</label>
+    <select id="productType">
+        <option value="BOISSON">Boisson</option>
+        <option value="NOURRITURE">Nourriture</option>
+    </select>
+</div>
+<div><label>Catégorie</label><input id="productCategory" list="categoryList" placeholder="Boisson, plat..."><datalist id="categoryList"></datalist></div><div><label>Prix vente</label><input id="productPrice" type="number" min="0"></div><div><label>Quantité</label><input id="productQty" type="number" min="0"></div><div><label>Seuil alerte</label><input id="productAlert" type="number" min="0"></div><div><label>Photo bordereau livraison</label><input id="deliveryPhoto" type="file" accept="image/*"></div></div><button onclick="saveProduct()">Enregistrer stock</button></div><div class="card"><h3>Recherche stock</h3><input id="stockSearch" placeholder="Rechercher produit ou catégorie" oninput="renderStock()"></div><div class="card"><h3>Stock actuel</h3><div id="stockTable"></div></div><div class="card"><h3>Historique détaillé du stock</h3><div id="stockHistoryTable"></div></div></section>
 <section id="orders" class="section"><div class="card"><h3>Nouvelle commande</h3><div class="grid-2"><div><label>Table</label><select id="orderTable"></select></div><div><label>Serveuse assignée</label><select id="orderWaitress"></select></div></div><div id="cartLines"></div><button class="secondary" onclick="addCartLine()">+ Ajouter une ligne</button><h3>Total : <span id="cartTotal">0 F</span></h3><button onclick="createInvoice()">Générer facture non payée</button></div></section>
 <section id="tables" class="section"><div class="card"><h3>Ajouter une table</h3><div class="row"><input id="tableName" placeholder="Ex: Table 1, VIP 1"><button onclick="addTable()">Ajouter</button></div></div><div class="card"><h3>Tables</h3><div id="tablesTable"></div></div></section>
 <section id="unpaid" class="section"><div class="card"><h3>Recherche factures non payées</h3><div class="grid-3"><input id="invoiceSearch" placeholder="N° facture, table, serveuse" oninput="renderInvoices()"><input id="invoiceDate" type="date" onchange="renderInvoices()"><button class="secondary" onclick="invoiceSearch.value='';invoiceDate.value='';renderInvoices()">Réinitialiser</button></div></div><div class="card"><h3>Factures non payées</h3><div id="unpaidTable"></div></div></section>
@@ -611,6 +618,7 @@ async function saveProduct(){
 
   const name = productName.value.trim();
   const category = productCategory.value.trim();
+  const typeStock = productType.value;
   const price = Number(productPrice.value);
   const qty = Number(productQty.value);
   const alertQty = Number(productAlert.value);
@@ -632,11 +640,12 @@ const res = await fetch(url,{
     },
     body:JSON.stringify({
       name,
-      category,
-      price,
-      qty,
-      alertQty,
-      deliveryPhoto: deliveryPhotoData || null
+    category,
+    typeStock,
+    price,
+    qty,
+    alertQty,
+    deliveryPhoto: deliveryPhotoData || null
     })
   });
 
@@ -673,9 +682,11 @@ async function editProduct(id){
   editingProductId = p.id;
   productName.value = p.name;
   productCategory.value = p.category;
+  productType.value="BOISSON";
   productPrice.value = p.price;
   productQty.value = p.qty;
   productAlert.value = p.alert_qty;
+  productType.value = p.type_stock;
 
   showSection("stock","Stock / bordereaux");
 }

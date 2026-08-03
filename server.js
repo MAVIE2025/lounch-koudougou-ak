@@ -560,12 +560,12 @@ app.put("/api/products/:id", authMiddleware, async (req, res) => {
 
     const result = await query(
       `UPDATE products
-       SET name=$1, category=$2, price=$3, qty=$4, alert_qty=$5,
+       SET name=$1, category=$2, price=$3, qty=$4, type_stock=$3, alert_qty=$5,
            delivery_photo=COALESCE($6, delivery_photo),
            updated_by=$7, updated_at=NOW()
        WHERE id=$8
        RETURNING *`,
-      [name, category, price, qty, alertQty, deliveryPhoto || null, req.user.full_name, req.params.id]
+      [name, category, price, qty, typeStock, alertQty, deliveryPhoto || null, req.user.full_name, req.params.id]
     );
 
     await query(
@@ -833,7 +833,15 @@ app.post("/api/products", authMiddleware, async (req, res) => {
     return res.status(403).json({ error: "Accès refusé" });
   }
 
-  const { name, category, price, qty, alertQty, deliveryPhoto } = req.body;
+  const {
+    name,
+    category,
+    typeStock,
+    price,
+    qty,
+    alertQty,
+    deliveryPhoto
+} = req.body;
 
   const existing = await query("SELECT * FROM products WHERE LOWER(name)=LOWER($1)", [name]);
 
@@ -871,8 +879,32 @@ app.post("/api/products", authMiddleware, async (req, res) => {
   }
 
   const r = await query(
-    "INSERT INTO products(name,category,price,qty,alert_qty,delivery_photo,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",
-    [name, category, price, qty, alertQty, deliveryPhoto || null, user.full_name]
+    "INSERT INTO products
+(
+name,
+category,
+type_stock,
+price,
+qty,
+alert_qty,
+delivery_photo,
+created_by
+)
+VALUES
+(
+$1,$2,$3,$4,$5,$6,$7,$8
+)
+RETURNING *",
+    [
+    name,
+    category,
+    typeStock,
+    price,
+    qty,
+    alertQty,
+    deliveryPhoto || null,
+    user.full_name
+]
   );
 
   await query(
