@@ -543,16 +543,42 @@ app.get("/api/my-orders", authMiddleware, async (req, res) => {
 
 app.put("/api/products/:id", authMiddleware, async (req, res) => {
   try {
+
     if (!requireRole(req.user, ["admin", "storekeeper"])) {
-      return res.status(403).json({ error: "Accès refusé" });
+      return res.status(403).json({
+        error: "Accès refusé"
+      });
     }
 
-    const { name, category, price, qty, alertQty, deliveryPhoto } = req.body;
+    const {
+      name,
+      category,
+      typeStock,
+      price,
+      qty,
+      alertQty,
+      deliveryPhoto
+    } = req.body;
 
-    const old = await query("SELECT * FROM products WHERE id=$1", [req.params.id]);
+    if (
+      !name ||
+      !category ||
+      !["BOISSON", "NOURRITURE"].includes(typeStock)
+    ) {
+      return res.status(400).json({
+        error: "Nom, catégorie et type obligatoires"
+      });
+    }
+
+    const old = await query(
+      "SELECT * FROM products WHERE id=$1",
+      [req.params.id]
+    );
 
     if (!old.rows.length) {
-      return res.status(404).json({ error: "Produit introuvable" });
+      return res.status(404).json({
+        error: "Produit introuvable"
+      });
     }
 
     const before = Number(old.rows[0].qty);
@@ -560,24 +586,67 @@ app.put("/api/products/:id", authMiddleware, async (req, res) => {
 
     const result = await query(
       `UPDATE products
-       SET name=$1, category=$2, price=$3, qty=$4, type_stock=$3, alert_qty=$5,
-           delivery_photo=COALESCE($6, delivery_photo),
-           updated_by=$7, updated_at=NOW()
-       WHERE id=$8
+       SET
+         name=$1,
+         category=$2,
+         type_stock=$3,
+         price=$4,
+         qty=$5,
+         alert_qty=$6,
+         delivery_photo=COALESCE($7, delivery_photo),
+         updated_by=$8,
+         updated_at=NOW()
+       WHERE id=$9
        RETURNING *`,
-      [name, category, price, qty, typeStock, alertQty, deliveryPhoto || null, req.user.full_name, req.params.id]
+      [
+        name,
+        category,
+        typeStock,
+        Number(price),
+        after,
+        Number(alertQty),
+        deliveryPhoto || null,
+        req.user.full_name,
+        req.params.id
+      ]
     );
 
     await query(
-      "INSERT INTO stock_history(product_name,before_qty,after_qty,diff_qty,action_type,user_name) VALUES($1,$2,$3,$4,$5,$6)",
-      [name, before, after, after - before, "Modification", req.user.full_name]
+      `INSERT INTO stock_history
+      (
+        product_name,
+        before_qty,
+        after_qty,
+        diff_qty,
+        action_type,
+        user_name
+      )
+      VALUES($1,$2,$3,$4,$5,$6)`,
+      [
+        name,
+        before,
+        after,
+        after - before,
+        "Modification",
+        req.user.full_name
+      ]
     );
 
-    res.json(result.rows[0]);
+    await addLog(
+      req.user,
+      "Modification produit",
+      `${name} / ${typeStock}`
+    );
+
+    return res.json(result.rows[0]);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erreur serveur" });
+
+    console.error("Erreur modification produit :", err);
+
+    return res.status(500).json({
+      error: err.message || "Erreur modification produit"
+    });
   }
 });
 
