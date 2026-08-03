@@ -878,24 +878,21 @@ app.post("/api/products", authMiddleware, async (req, res) => {
     return res.json(r.rows[0]);
   }
 
-  const r = await query(
-    "INSERT INTO products
-(
-name,
-category,
-type_stock,
-price,
-qty,
-alert_qty,
-delivery_photo,
-created_by
-)
-VALUES
-(
-$1,$2,$3,$4,$5,$6,$7,$8
-)
-RETURNING *",
-    [
+ const r = await query(
+  `INSERT INTO products
+  (
+    name,
+    category,
+    type_stock,
+    price,
+    qty,
+    alert_qty,
+    delivery_photo,
+    created_by
+  )
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+  RETURNING *`,
+  [
     name,
     category,
     typeStock,
@@ -904,8 +901,8 @@ RETURNING *",
     alertQty,
     deliveryPhoto || null,
     user.full_name
-]
-  );
+  ]
+);
 
   await query(
     "INSERT INTO stock_history(product_name,before_qty,after_qty,diff_qty,action_type,user_name) VALUES($1,$2,$3,$4,$5,$6)",
