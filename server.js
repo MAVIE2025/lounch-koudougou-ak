@@ -55,6 +55,38 @@ function requireRole(user, roles) {
   return roles.includes(role);
 }
 
+function normalizeAccountingAccess(access) {
+  return String(access || "NONE")
+    .trim()
+    .toUpperCase();
+}
+
+function canViewAccounting(user) {
+  if (!user) return false;
+
+  if (requireRole(user, ["admin"])) {
+    return true;
+  }
+
+  const access = normalizeAccountingAccess(
+    user.accounting_access
+  );
+
+  return access === "READ" || access === "EDIT";
+}
+
+function canEditAccounting(user) {
+  if (!user) return false;
+
+  if (requireRole(user, ["admin"])) {
+    return true;
+  }
+
+  return normalizeAccountingAccess(
+    user.accounting_access
+  ) === "EDIT";
+}
+
 async function authMiddleware(req, res, next) {
   try {
     const header = req.headers.authorization || "";
@@ -65,9 +97,19 @@ async function authMiddleware(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     const result = await query(
-      "SELECT id, full_name, username, role, active FROM users WHERE id=$1 AND active=true LIMIT 1",
-      [decoded.id]
-    );
+  `SELECT
+     id,
+     full_name,
+     username,
+     role,
+     active,
+     accounting_access
+   FROM users
+   WHERE id=$1
+     AND active=true
+   LIMIT 1`,
+  [decoded.id]
+);
 
     if (!result.rows.length) {
       return res.status(401).json({ error: "Session invalide" });
@@ -84,7 +126,18 @@ async function getUserFromHeader(req) {
   // Compatibilité ancienne interface : x-user-id
   const id = req.headers["x-user-id"];
   if (!id) return null;
-  const r = await query("SELECT id, full_name, username, role, active FROM users WHERE id=$1", [id]);
+  const r = await query(
+  `SELECT
+     id,
+     full_name,
+     username,
+     role,
+     active,
+     accounting_access
+   FROM users
+   WHERE id=$1`,
+  [id]
+);
   return r.rows[0] || null;
 }
 
@@ -99,9 +152,19 @@ async function getCurrentUser(req) {
       const decoded = jwt.verify(token, JWT_SECRET);
 
       const result = await query(
-        "SELECT id, full_name, username, role, active FROM users WHERE id=$1 AND active=true LIMIT 1",
-        [decoded.id]
-      );
+  `SELECT
+     id,
+     full_name,
+     username,
+     role,
+     active,
+     accounting_access
+   FROM users
+   WHERE id=$1
+     AND active=true
+   LIMIT 1`,
+  [decoded.id]
+);
 
       if (result.rows.length) {
         return result.rows[0];
@@ -158,6 +221,69 @@ async function initDb() {
     updated_at TIMESTAMP DEFAULT NOW()
   );
   `);
+
+  await query(`
+  ALTER TABLE products
+  ADD COLUMN IF NOT EXISTS purchase_price INTEGER
+  DEFAULT 0;
+`);
+
+await query(`
+  UPDATE products
+  SET purchase_price = 0
+  WHERE purchase_price IS NULL;
+`);
+
+await query(`
+  ALTER TABLE products
+  ALTER COLUMN purchase_price SET DEFAULT 0;
+`);
+
+await query(`
+  ALTER TABLE products
+  ALTER COLUMN purchase_price SET NOT NULL;
+`);
+
+  await query(`
+  ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS accounting_access TEXT
+  DEFAULT 'NONE';
+`);
+
+await query(`
+  UPDATE users
+  SET accounting_access = CASE
+    WHEN role = 'admin' THEN 'EDIT'
+    ELSE 'NONE'
+  END
+  WHERE accounting_access IS NULL;
+`);
+
+await query(`
+  ALTER TABLE users
+  ALTER COLUMN accounting_access SET DEFAULT 'NONE';
+`);
+
+await query(`
+  ALTER TABLE users
+  ALTER COLUMN accounting_access SET NOT NULL;
+`);
+
+await query(`
+  DO $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'users_accounting_access_check'
+    ) THEN
+      ALTER TABLE users
+      ADD CONSTRAINT users_accounting_access_check
+      CHECK(accounting_access IN ('NONE', 'READ', 'EDIT'));
+    END IF;
+  END
+  $$;
+`);
 
   await query(`
   ALTER TABLE products
@@ -284,6 +410,69 @@ await query(`
 `);
 
 await query(`
+  ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS purchase_price INTEGER
+  DEFAULT 0;
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS sale_price INTEGER
+  DEFAULT 0;
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ADD COLUMN IF NOT EXISTS profit INTEGER
+  DEFAULT 0;
+`);
+
+await query(`
+  UPDATE invoice_items
+  SET sale_price = price
+  WHERE sale_price IS NULL
+     OR sale_price = 0;
+`);
+
+await query(`
+  UPDATE invoice_items
+  SET purchase_price = COALESCE(
+    (
+      SELECT p.purchase_price
+      FROM products p
+      WHERE p.id = invoice_items.product_id
+    ),
+    0
+  )
+  WHERE purchase_price IS NULL;
+`);
+
+await query(`
+  UPDATE invoice_items
+  SET profit =
+    (
+      COALESCE(sale_price, price, 0)
+      - COALESCE(purchase_price, 0)
+    ) * qty
+  WHERE profit IS NULL;
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ALTER COLUMN purchase_price SET DEFAULT 0;
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ALTER COLUMN sale_price SET DEFAULT 0;
+`);
+
+await query(`
+  ALTER TABLE invoice_items
+  ALTER COLUMN profit SET DEFAULT 0;
+`);
+
+await query(`
   DO $$
   BEGIN
     IF NOT EXISTS (
@@ -345,6 +534,42 @@ await query(`
       created_at TIMESTAMP DEFAULT NOW()
     );
   `);
+
+  await query(`
+  CREATE TABLE IF NOT EXISTS product_price_history (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER,
+    product_name TEXT NOT NULL,
+
+    old_purchase_price INTEGER DEFAULT 0,
+    new_purchase_price INTEGER DEFAULT 0,
+
+    old_sale_price INTEGER DEFAULT 0,
+    new_sale_price INTEGER DEFAULT 0,
+
+    changed_by_id INTEGER,
+    changed_by_name TEXT,
+
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+  );
+`);
+
+await query(`
+  CREATE TABLE IF NOT EXISTS expenses (
+    id SERIAL PRIMARY KEY,
+    expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    category TEXT NOT NULL,
+    description TEXT,
+    amount INTEGER NOT NULL CHECK(amount > 0),
+    created_by_id INTEGER,
+    created_by_name TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+  );
+`);
+
+
 
   const admin = await query("SELECT id FROM users WHERE username=$1", ["admin"]);
   if (admin.rowCount === 0) {
@@ -825,12 +1050,16 @@ app.post("/api/login", async (req, res) => {
       success: true,
       token,
       user: {
-        id: user.id,
-        fullName: user.full_name,
-        username: user.username,
-        role: user.role,
-        active: user.active
-      }
+  id: user.id,
+  fullName: user.full_name,
+  username: user.username,
+  role: user.role,
+  active: user.active,
+  accountingAccess:
+    user.role === "admin"
+      ? "EDIT"
+      : user.accounting_access || "NONE"
+}
     });
   } catch (err) {
     console.error(err);
@@ -845,10 +1074,18 @@ app.get("/api/users", authMiddleware, async (req, res) => {
     }
 
     const result = await query(
-      `SELECT id, full_name, username, plain_password, role, active, created_at
-       FROM users
-       ORDER BY id DESC`
-    );
+  `SELECT
+     id,
+     full_name,
+     username,
+     plain_password,
+     role,
+     active,
+     accounting_access,
+     created_at
+   FROM users
+   ORDER BY id DESC`
+);
 
     res.json(result.rows);
   } catch (err) {
