@@ -1365,33 +1365,49 @@ app.post("/api/invoices", authMiddleware, async (req, res) => {
     const prepared = [];
 
     for (const it of items) {
-      const pr = await client.query("SELECT * FROM products WHERE id=$1 FOR UPDATE", [it.productId]);
-      if (pr.rowCount === 0) throw new Error("Produit introuvable");
+  const pr = await client.query(
+    "SELECT * FROM products WHERE id=$1 FOR UPDATE",
+    [it.productId]
+  );
 
-      const p = pr.rows[0];
-      if (Number(p.qty) < Number(it.qty)) throw new Error(`Stock insuffisant pour ${p.name}`);
+  if (pr.rowCount === 0) {
+    throw new Error("Produit introuvable");
+  }
 
-      const lineTotal = Number(p.price) * Number(it.qty);
-      total += lineTotal;
-      const purchasePrice = Number(p.purchase_price || 0);
-const salePrice = Number(p.price || 0);
-const quantity = Number(it.qty);
+  const p = pr.rows[0];
+  const quantity = Number(it.qty);
 
-const lineTotal = salePrice * quantity;
-const lineProfit =
-  (salePrice - purchasePrice) * quantity;
+  if (Number(p.qty) < quantity) {
+    throw new Error(
+      `Stock insuffisant pour ${p.name}`
+    );
+  }
 
-total += lineTotal;
+  const purchasePrice = Number(
+    p.purchase_price || 0
+  );
 
-prepared.push({
-  p,
-  qty: quantity,
-  purchasePrice,
-  salePrice,
-  lineTotal,
-  lineProfit
-});
-    }
+  const salePrice = Number(
+    p.price || 0
+  );
+
+  const lineTotal =
+    salePrice * quantity;
+
+  const lineProfit =
+    (salePrice - purchasePrice) * quantity;
+
+  total += lineTotal;
+
+  prepared.push({
+    p,
+    qty: quantity,
+    purchasePrice,
+    salePrice,
+    lineTotal,
+    lineProfit
+  });
+}
 
     const count = await client.query("SELECT COUNT(*)::int AS c FROM invoices");
     const lastInvoice = await query(`
