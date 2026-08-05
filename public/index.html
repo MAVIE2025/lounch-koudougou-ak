@@ -1617,11 +1617,131 @@ function reportQuery(prefix='report'){
   for(const k of ['Date','Week','Month','Quarter','Semester']){const el=document.getElementById(prefix+k);if(el)p.set(k.toLowerCase(),el.value);}
   return p.toString();
 }
-async function downloadTransactionsReport(){
-  const prefix=document.getElementById('accounting')?.classList.contains('active')?'accounting':'report';
-  const res=await fetch('/api/reports/transactions?'+reportQuery(prefix),{headers:{Authorization:'Bearer '+sessionStorage.getItem('lounch_token')}});
-  if(!res.ok){const d=await res.json().catch(()=>({}));return alert(d.error||'Erreur téléchargement');}
-  const blob=await res.blob(),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='rapport_le_domaine.xlsx';a.click();URL.revokeObjectURL(a.href);
+async function downloadTransactionsReport() {
+  if (!requireRoles(["admin"])) {
+    return alert("Accès refusé");
+  }
+
+  const type =
+    document.getElementById("reportType").value;
+
+  const year =
+    document.getElementById("reportYear")?.value;
+
+  let url =
+    "/api/reports/transactions" +
+    "?type=" + encodeURIComponent(type);
+
+  if (type === "day") {
+    const selectedDate =
+      document.getElementById("reportDate")?.value;
+
+    if (!selectedDate) {
+      return alert("Sélectionnez une date.");
+    }
+
+    url +=
+      "&date=" +
+      encodeURIComponent(selectedDate);
+  } else {
+    url +=
+      "&year=" +
+      encodeURIComponent(year);
+  }
+
+  if (type === "month") {
+    url +=
+      "&month=" +
+      encodeURIComponent(
+        document.getElementById("reportMonth").value
+      );
+  }
+
+  if (type === "quarter") {
+    url +=
+      "&quarter=" +
+      encodeURIComponent(
+        document.getElementById("reportQuarter").value
+      );
+  }
+
+  if (type === "semester") {
+    url +=
+      "&semester=" +
+      encodeURIComponent(
+        document.getElementById("reportSemester").value
+      );
+  }
+
+  try {
+    const button = event?.currentTarget;
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Génération...";
+    }
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization:
+          "Bearer " +
+          sessionStorage.getItem("lounch_token")
+      }
+    });
+
+    if (!res.ok) {
+      const errorData = await res
+        .json()
+        .catch(() => ({}));
+
+      throw new Error(
+        errorData.error ||
+        "Erreur génération du rapport"
+      );
+    }
+
+    const blob = await res.blob();
+
+    const downloadUrl =
+      URL.createObjectURL(blob);
+
+    const link =
+      document.createElement("a");
+
+    link.href = downloadUrl;
+
+    link.download =
+      "rapport_comptabilite_" +
+      type +
+      "_" +
+      new Date()
+        .toISOString()
+        .slice(0, 10) +
+      ".xlsx";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(downloadUrl);
+
+  } catch (err) {
+    console.error(err);
+
+    alert(
+      err.message ||
+      "Impossible de générer le rapport."
+    );
+
+  } finally {
+    const button = event?.currentTarget;
+
+    if (button) {
+      button.disabled = false;
+      button.textContent =
+        "Télécharger rapport Excel";
+    }
+  }
 }
 async function loadAccountingReport(prefix='accounting'){
   const res=await fetch('/api/accounting/report?'+reportQuery(prefix),{headers:{Authorization:'Bearer '+sessionStorage.getItem('lounch_token')}});

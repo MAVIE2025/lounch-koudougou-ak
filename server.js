@@ -472,6 +472,35 @@ await query(`
   ALTER COLUMN profit SET DEFAULT 0;
 `);
 
+/*
+  Migration des anciennes ventes.
+
+  Les ventes enregistrées avant la création du module comptable
+  reçoivent le prix d'achat actuellement renseigné sur le produit.
+*/
+await query(`
+  UPDATE invoice_items ii
+  SET purchase_price = COALESCE(p.purchase_price, 0)
+  FROM products p
+  WHERE p.id = ii.product_id
+    AND COALESCE(ii.purchase_price, 0) = 0;
+`);
+
+await query(`
+  UPDATE invoice_items
+  SET sale_price = COALESCE(NULLIF(sale_price, 0), price, 0)
+  WHERE COALESCE(sale_price, 0) = 0;
+`);
+
+await query(`
+  UPDATE invoice_items
+  SET profit =
+    (
+      COALESCE(NULLIF(sale_price, 0), price, 0)
+      - COALESCE(purchase_price, 0)
+    ) * COALESCE(qty, 0);
+`);
+
 await query(`
   DO $$
   BEGIN
@@ -1344,7 +1373,24 @@ app.post("/api/invoices", authMiddleware, async (req, res) => {
 
       const lineTotal = Number(p.price) * Number(it.qty);
       total += lineTotal;
-      prepared.push({ p, qty: Number(it.qty), lineTotal });
+      const purchasePrice = Number(p.purchase_price || 0);
+const salePrice = Number(p.price || 0);
+const quantity = Number(it.qty);
+
+const lineTotal = salePrice * quantity;
+const lineProfit =
+  (salePrice - purchasePrice) * quantity;
+
+total += lineTotal;
+
+prepared.push({
+  p,
+  qty: quantity,
+  purchasePrice,
+  salePrice,
+  lineTotal,
+  lineProfit
+});
     }
 
     const count = await client.query("SELECT COUNT(*)::int AS c FROM invoices");
@@ -1375,9 +1421,35 @@ const number = "FAC-" + String(lastNumber + 1).padStart(5,"0");
       await client.query("UPDATE products SET qty=$1 WHERE id=$2", [after, line.p.id]);
 
       await client.query(
-        "INSERT INTO invoice_items(invoice_id,product_id,product_name,qty,price,total) VALUES($1,$2,$3,$4,$5,$6)",
-        [inv.rows[0].id, line.p.id, line.p.name, line.qty, line.p.price, line.lineTotal]
-      );
+  `
+  INSERT INTO invoice_items
+  (
+    invoice_id,
+    product_id,
+    product_name,
+    type_stock,
+    qty,
+    price,
+    purchase_price,
+    sale_price,
+    profit,
+    total
+  )
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+  `,
+  [
+    inv.rows[0].id,
+    line.p.id,
+    line.p.name,
+    line.p.type_stock || "BOISSON",
+    line.qty,
+    line.salePrice,
+    line.purchasePrice,
+    line.salePrice,
+    line.lineProfit,
+    line.lineTotal
+  ]
+);
 
       await client.query(
         "INSERT INTO stock_history(product_name,before_qty,after_qty,diff_qty,action_type,user_name) VALUES($1,$2,$3,$4,$5,$6)",
@@ -1642,147 +1714,6 @@ app.post("/api/invoices/:id/gap", authMiddleware, async (req, res) => {
   }
 });
 
-app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
-  try {
-    if (!requireRole(req.user, ["admin"])) {
-      return res.status(403).json({ error: "Accès refusé" });
-    }
-
-    const year = Number(req.query.year);
-    const type = String(req.query.type || "");
-    const month = Number(req.query.month || 0);
-    const semester = Number(req.query.semester || 0);
-
-    let startDate;
-    let endDate;
-    let periodLabel = "";
-
-    if (type === "month") {
-      startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-      endDate = month === 12
-        ? `${year + 1}-01-01`
-        : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-      periodLabel = `Mois ${month}/${year}`;
-    } else if (type === "semester") {
-      if (semester === 1) {
-        startDate = `${year}-01-01`;
-        endDate = `${year}-07-01`;
-        periodLabel = `Janvier à Juin ${year}`;
-      } else {
-        startDate = `${year}-07-01`;
-        endDate = `${year + 1}-01-01`;
-        periodLabel = `Juillet à Décembre ${year}`;
-      }
-    } else if (type === "year") {
-      startDate = `${year}-01-01`;
-      endDate = `${year + 1}-01-01`;
-      periodLabel = `Année ${year}`;
-    } else {
-      return res.status(400).json({ error: "Type invalide" });
-    }
-
-    const result = await query(`
-      SELECT
-        number,
-        created_at,
-        paid_at,
-        table_name,
-        waitress_name,
-        cashier_name,
-        total,
-        status,
-        payment_mode,
-        amount_given,
-        change_amount
-      FROM invoices
-      WHERE created_at >= $1
-        AND created_at < $2
-      ORDER BY created_at ASC
-    `, [startDate, endDate]);
-
-    const rows = result.rows;
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Transactions");
-
-    sheet.mergeCells("A1:K1");
-    sheet.getCell("A1").value = "LE DOMAINE - RAPPORT DES TRANSACTIONS";
-    sheet.getCell("A1").font = { bold: true, size: 16 };
-    sheet.getCell("A1").alignment = { horizontal: "center" };
-
-    sheet.mergeCells("A2:K2");
-    sheet.getCell("A2").value = periodLabel;
-    sheet.getCell("A2").alignment = { horizontal: "center" };
-
-    sheet.addRow([]);
-
-    sheet.addRow([
-      "Numéro",
-      "Date création",
-      "Date paiement",
-      "Table",
-      "Serveuse",
-      "Caissier",
-      "Total",
-      "Statut",
-      "Mode paiement",
-      "Montant remis",
-      "Monnaie"
-    ]);
-
-    rows.forEach(r => {
-      sheet.addRow([
-        r.number,
-        r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "",
-        r.paid_at ? new Date(r.paid_at).toLocaleString("fr-FR") : "",
-        r.table_name || "",
-        r.waitress_name || "",
-        r.cashier_name || "",
-        Number(r.total || 0),
-        r.status === "paid" ? "Payée" : "Non payée",
-        r.payment_mode || "",
-        Number(r.amount_given || 0),
-        Number(r.change_amount || 0)
-      ]);
-    });
-
-    const totalPaid = rows
-      .filter(r => r.status === "paid")
-      .reduce((s, r) => s + Number(r.total || 0), 0);
-
-    const totalUnpaid = rows
-      .filter(r => r.status === "unpaid")
-      .reduce((s, r) => s + Number(r.total || 0), 0);
-
-    sheet.addRow([]);
-    sheet.addRow(["TOTAL PAYÉ", totalPaid]);
-    sheet.addRow(["TOTAL NON PAYÉ", totalUnpaid]);
-    sheet.addRow(["TOTAL GÉNÉRAL", totalPaid + totalUnpaid]);
-
-    sheet.columns.forEach(col => {
-      col.width = 18;
-    });
-
-    sheet.getRow(4).font = { bold: true };
-
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="rapport_transactions_${type}_${year}.xlsx"`
-    );
-
-    await workbook.xlsx.write(res);
-    res.end();
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erreur génération rapport Excel" });
-  }
-});
 
 app.post("/api/withdrawals", authMiddleware, async (req,res)=>{
   try{
@@ -1939,132 +1870,370 @@ res.json({
 
 });
 
-app.get("/api/reports/transactions", authMiddleware, async (req, res) => {
-  try {
-    if (!requireRole(req.user, ["admin"])) {
-      return res.status(403).json({ error: "Accès refusé" });
+function getReportPeriod(queryParams) {
+  const type = String(queryParams.type || "").trim();
+  const year = Number(queryParams.year);
+  const month = Number(queryParams.month);
+  const quarter = Number(queryParams.quarter);
+  const semester = Number(queryParams.semester);
+  const date = String(queryParams.date || "").trim();
+
+  if (type === "day") {
+    if (!date) {
+      throw new Error("Date obligatoire");
     }
 
-    const year = Number(req.query.year);
-    const type = String(req.query.type || "");
-    const month = Number(req.query.month || 0);
-    const semester = Number(req.query.semester || 0);
+    return {
+      startDate: date,
+      endDate: `${date} 23:59:59.999`,
+      label: `Journée du ${date}`
+    };
+  }
 
-    if (!year) {
-      return res.status(400).json({ error: "Année obligatoire" });
+  if (!year) {
+    throw new Error("Année obligatoire");
+  }
+
+  if (type === "month") {
+    if (month < 1 || month > 12) {
+      throw new Error("Mois invalide");
     }
 
-    let startDate;
-    let endDate;
+    const startDate =
+      `${year}-${String(month).padStart(2, "0")}-01`;
 
-    if (type === "month") {
-      startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-      endDate = month === 12
+    const endDate =
+      month === 12
         ? `${year + 1}-01-01`
         : `${year}-${String(month + 1).padStart(2, "0")}-01`;
-    } else if (type === "semester") {
-      if (semester === 1) {
-        startDate = `${year}-01-01`;
-        endDate = `${year}-07-01`;
-      } else {
-        startDate = `${year}-07-01`;
-        endDate = `${year + 1}-01-01`;
-      }
-    } else if (type === "year") {
-      startDate = `${year}-01-01`;
-      endDate = `${year + 1}-01-01`;
-    } else {
-      return res.status(400).json({ error: "Type invalide" });
+
+    return {
+      startDate,
+      endDate,
+      label: `Mois ${month}/${year}`
+    };
+  }
+
+  if (type === "quarter") {
+    if (quarter < 1 || quarter > 4) {
+      throw new Error("Trimestre invalide");
     }
 
-    const result = await query(
-      `
-      SELECT
-        number,
-        created_at,
-        paid_at,
-        table_name,
-        waitress_name,
-        cashier_name,
-        total,
-        status,
-        payment_mode,
-        amount_given,
-        change_amount
-      FROM invoices
-      WHERE created_at >= $1
-        AND created_at < $2
-      ORDER BY created_at ASC
-      `,
-      [startDate, endDate]
-    );
+    const startMonth = (quarter - 1) * 3 + 1;
+    const endMonth = startMonth + 3;
 
-    const rows = result.rows;
+    const startDate =
+      `${year}-${String(startMonth).padStart(2, "0")}-01`;
 
-    const totalPaid = rows
-      .filter(r => r.status === "paid")
-      .reduce((s, r) => s + Number(r.total || 0), 0);
+    const endDate =
+      endMonth > 12
+        ? `${year + 1}-01-01`
+        : `${year}-${String(endMonth).padStart(2, "0")}-01`;
 
-    const totalUnpaid = rows
-      .filter(r => r.status === "unpaid")
-      .reduce((s, r) => s + Number(r.total || 0), 0);
-
-    const csvRows = [];
-
-    csvRows.push([
-      "Numéro",
-      "Date création",
-      "Date paiement",
-      "Table",
-      "Serveuse",
-      "Caissier",
-      "Total",
-      "Statut",
-      "Mode paiement",
-      "Montant remis",
-      "Monnaie"
-    ].join(";"));
-
-    rows.forEach(r => {
-      csvRows.push([
-        r.number,
-        r.created_at ? new Date(r.created_at).toLocaleString("fr-FR") : "",
-        r.paid_at ? new Date(r.paid_at).toLocaleString("fr-FR") : "",
-        r.table_name || "",
-        r.waitress_name || "",
-        r.cashier_name || "",
-        r.total || 0,
-        r.status === "paid" ? "Payée" : "Non payée",
-        r.payment_mode || "",
-        r.amount_given || 0,
-        r.change_amount || 0
-      ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";"));
-    });
-
-    csvRows.push("");
-    csvRows.push(`"TOTAL PAYÉ";"${totalPaid}"`);
-    csvRows.push(`"TOTAL NON PAYÉ";"${totalUnpaid}"`);
-    csvRows.push(`"TOTAL GÉNÉRAL";"${totalPaid + totalUnpaid}"`);
-
-    const csv = "﻿" + csvRows.join("\n");
-
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="rapport_transactions_${type}_${year}.csv"`
-    );
-
-    res.send(csv);
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erreur génération rapport" });
+    return {
+      startDate,
+      endDate,
+      label: `Trimestre ${quarter} - ${year}`
+    };
   }
-});
+
+  if (type === "semester") {
+    if (![1, 2].includes(semester)) {
+      throw new Error("Semestre invalide");
+    }
+
+    return semester === 1
+      ? {
+          startDate: `${year}-01-01`,
+          endDate: `${year}-07-01`,
+          label: `Premier semestre ${year}`
+        }
+      : {
+          startDate: `${year}-07-01`,
+          endDate: `${year + 1}-01-01`,
+          label: `Deuxième semestre ${year}`
+        };
+  }
+
+  if (type === "year") {
+    return {
+      startDate: `${year}-01-01`,
+      endDate: `${year + 1}-01-01`,
+      label: `Année ${year}`
+    };
+  }
+
+  throw new Error("Type de rapport invalide");
+}
+
+app.get(
+  "/api/reports/transactions",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      if (!canViewAccounting(req.user)) {
+        return res.status(403).json({
+          error: "Accès comptabilité refusé"
+        });
+      }
+
+      const period = getReportPeriod(req.query);
+
+      const result = await query(
+        `
+        SELECT
+          i.number,
+          i.created_at,
+          i.paid_at,
+          i.table_name,
+          i.waitress_name,
+          i.cashier_name,
+          i.status,
+          i.payment_mode,
+
+          ii.product_name,
+          ii.type_stock,
+          ii.qty,
+
+          COALESCE(
+            NULLIF(ii.sale_price, 0),
+            ii.price,
+            0
+          )::int AS sale_price,
+
+          COALESCE(
+            ii.purchase_price,
+            p.purchase_price,
+            0
+          )::int AS purchase_price,
+
+          ii.total::int AS line_total,
+
+          (
+            (
+              COALESCE(
+                NULLIF(ii.sale_price, 0),
+                ii.price,
+                0
+              )
+              -
+              COALESCE(
+                ii.purchase_price,
+                p.purchase_price,
+                0
+              )
+            )
+            * ii.qty
+          )::int AS profit
+
+        FROM invoice_items ii
+
+        JOIN invoices i
+          ON i.id = ii.invoice_id
+
+        LEFT JOIN products p
+          ON p.id = ii.product_id
+
+        WHERE i.status = 'paid'
+          AND i.paid_at >= $1
+          AND i.paid_at < $2
+
+        ORDER BY i.paid_at ASC, i.id ASC, ii.id ASC
+        `,
+        [period.startDate, period.endDate]
+      );
+
+      const rows = result.rows;
+
+      const workbook = new ExcelJS.Workbook();
+
+      const detailSheet =
+        workbook.addWorksheet("Ventes détaillées");
+
+      detailSheet.mergeCells("A1:N1");
+      detailSheet.getCell("A1").value =
+        "LE DOMAINE - RAPPORT DÉTAILLÉ DES VENTES";
+
+      detailSheet.getCell("A1").font = {
+        bold: true,
+        size: 16
+      };
+
+      detailSheet.getCell("A1").alignment = {
+        horizontal: "center"
+      };
+
+      detailSheet.mergeCells("A2:N2");
+      detailSheet.getCell("A2").value = period.label;
+      detailSheet.getCell("A2").alignment = {
+        horizontal: "center"
+      };
+
+      detailSheet.addRow([]);
+
+      detailSheet.addRow([
+        "Facture",
+        "Date",
+        "Heure",
+        "Table",
+        "Serveuse",
+        "Caissier",
+        "Produit",
+        "Type",
+        "Quantité",
+        "Prix achat",
+        "Prix vente",
+        "Total vente",
+        "Bénéfice",
+        "Paiement"
+      ]);
+
+      rows.forEach(row => {
+        const paymentDate =
+          row.paid_at
+            ? new Date(row.paid_at)
+            : new Date(row.created_at);
+
+        detailSheet.addRow([
+          row.number,
+          paymentDate.toLocaleDateString("fr-FR"),
+          paymentDate.toLocaleTimeString("fr-FR"),
+          row.table_name || "",
+          row.waitress_name || "",
+          row.cashier_name || "",
+          row.product_name || "",
+          row.type_stock || "",
+          Number(row.qty || 0),
+          Number(row.purchase_price || 0),
+          Number(row.sale_price || 0),
+          Number(row.line_total || 0),
+          Number(row.profit || 0),
+          row.payment_mode || ""
+        ]);
+      });
+
+      detailSheet.getRow(4).font = {
+        bold: true
+      };
+
+      detailSheet.columns.forEach(column => {
+        column.width = 18;
+      });
+
+      const accountingSheet =
+        workbook.addWorksheet("Comptabilité");
+
+      accountingSheet.addRow([
+        "Produit",
+        "Quantité vendue",
+        "Chiffre d'affaires",
+        "Coût d'achat",
+        "Bénéfice"
+      ]);
+
+      const grouped = {};
+
+      rows.forEach(row => {
+        const key = row.product_name || "Produit inconnu";
+
+        if (!grouped[key]) {
+          grouped[key] = {
+            productName: key,
+            qty: 0,
+            revenue: 0,
+            cost: 0,
+            profit: 0
+          };
+        }
+
+        grouped[key].qty += Number(row.qty || 0);
+        grouped[key].revenue +=
+          Number(row.line_total || 0);
+
+        grouped[key].cost +=
+          Number(row.purchase_price || 0) *
+          Number(row.qty || 0);
+
+        grouped[key].profit +=
+          Number(row.profit || 0);
+      });
+
+      Object.values(grouped).forEach(item => {
+        accountingSheet.addRow([
+          item.productName,
+          item.qty,
+          item.revenue,
+          item.cost,
+          item.profit
+        ]);
+      });
+
+      const totalRevenue = rows.reduce(
+        (sum, row) =>
+          sum + Number(row.line_total || 0),
+        0
+      );
+
+      const totalCost = rows.reduce(
+        (sum, row) =>
+          sum +
+          Number(row.purchase_price || 0) *
+          Number(row.qty || 0),
+        0
+      );
+
+      const totalProfit = totalRevenue - totalCost;
+
+      accountingSheet.addRow([]);
+      accountingSheet.addRow([
+        "TOTAL",
+        "",
+        totalRevenue,
+        totalCost,
+        totalProfit
+      ]);
+
+      accountingSheet.getRow(1).font = {
+        bold: true
+      };
+
+      accountingSheet.columns.forEach(column => {
+        column.width = 24;
+      });
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="rapport_comptabilite_${req.query.type || "periode"}.xlsx"`
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
+
+    } catch (err) {
+      console.error(
+        "Erreur rapport comptabilité :",
+        err
+      );
+
+      res.status(500).json({
+        error:
+          err.message ||
+          "Erreur génération du rapport"
+      });
+    }
+  }
+);
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
+
 
 initDb()
   .then(() => {
