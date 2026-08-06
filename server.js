@@ -1888,6 +1888,123 @@ res.json({
 
 });
 
+app.get(
+  "/api/waitress-ranking",
+  authMiddleware,
+  async (req, res) => {
+    try {
+      if (!requireRole(req.user, ["admin"])) {
+        return res.status(403).json({
+          error: "Accès réservé à l’administrateur"
+        });
+      }
+
+      const now = new Date();
+
+      const month = Number(
+        req.query.month || now.getMonth() + 1
+      );
+
+      const year = Number(
+        req.query.year || now.getFullYear()
+      );
+
+      if (
+        !Number.isInteger(month) ||
+        month < 1 ||
+        month > 12
+      ) {
+        return res.status(400).json({
+          error: "Mois invalide"
+        });
+      }
+
+      if (
+        !Number.isInteger(year) ||
+        year < 2020 ||
+        year > 2100
+      ) {
+        return res.status(400).json({
+          error: "Année invalide"
+        });
+      }
+
+      const startDate =
+        `${year}-${String(month).padStart(2, "0")}-01`;
+
+      const endDate =
+        month === 12
+          ? `${year + 1}-01-01`
+          : `${year}-${String(month + 1).padStart(2, "0")}-01`;
+
+      const result = await query(
+        `
+        SELECT
+          u.id AS waitress_id,
+          u.full_name AS waitress_name,
+
+          COUNT(i.id)::int AS invoice_count,
+
+          COALESCE(
+            SUM(i.total),
+            0
+          )::int AS total
+
+        FROM users u
+
+        LEFT JOIN invoices i
+          ON i.waitress_id = u.id
+          AND i.status = 'paid'
+          AND i.paid_at >= $1
+          AND i.paid_at < $2
+
+        WHERE u.role = 'waitress'
+
+        GROUP BY
+          u.id,
+          u.full_name
+
+        ORDER BY
+          total DESC,
+          invoice_count DESC,
+          u.full_name ASC
+        `,
+        [startDate, endDate]
+      );
+
+      const ranking = result.rows.map(
+        (waitress, index) => ({
+          rank: index + 1,
+          waitressId: waitress.waitress_id,
+          waitressName: waitress.waitress_name,
+          invoiceCount: Number(
+            waitress.invoice_count || 0
+          ),
+          total: Number(waitress.total || 0)
+        })
+      );
+
+      return res.json({
+        month,
+        year,
+        startDate,
+        endDate,
+        ranking
+      });
+
+    } catch (err) {
+      console.error(
+        "Erreur classement mensuel des serveuses :",
+        err
+      );
+
+      return res.status(500).json({
+        error: "Impossible de charger le classement"
+      });
+    }
+  }
+);
+
 function getReportPeriod(queryParams) {
   const type = String(queryParams.type || "").trim();
   const year = Number(queryParams.year);
