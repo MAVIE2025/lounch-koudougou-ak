@@ -1824,12 +1824,14 @@ app.get("/api/stats", async (req, res) => {
   `);
 
  const waitressSales = await query(`
-  SELECT waitress_name,
-  COALESCE(SUM(total),0)::int AS total
-  FROM invoices
-  WHERE status='paid'
-  GROUP BY waitress_name
-  ORDER BY total DESC
+SELECT
+    waitress_name,
+    COALESCE(SUM(total),0)::int AS total
+FROM invoices
+WHERE status='paid'
+  AND DATE_TRUNC('month', paid_at)=DATE_TRUNC('month', CURRENT_DATE)
+GROUP BY waitress_name
+ORDER BY total DESC
 `);
 
 const waitressItems = await query(`
