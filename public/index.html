@@ -33,7 +33,38 @@
 <body>
 <div id="loginPage" class="login-wrap"><div class="login-card"><div class="brand"><img src="logo.png" class="login-logo"><h1>LE DOMAINE</h1><p>Logiciel de gestion maquis-bar</p></div><div class="alert"><br>Votre Espace : <b>LE DOMAINE</b><br> </b><br>Role : <b>ADMINISTRATION</b></div><label>Nom utilisateur</label><input id="loginUsername" placeholder="Votre Identifiant"><label>Mot de passe</label><input id="loginPassword" type="password" placeholder="Votre Mot de Passe"><button onclick="login()">Se connecter</button><p id="loginError" class="muted"></p></div></div>
 <div id="appPage" class="hidden"><div class="layout"><aside><img src="logo.png" class="main-logo"><h2>LE DOMAINE</h2><div class="role" id="currentUserInfo"></div><nav id="menu"></nav><button class="danger" onclick="logout()" style="margin-top:16px">Déconnexion</button></aside><main><div class="topbar"><h1 id="pageTitle">Tableau de bord</h1><div class="muted" id="todayText"></div></div>
-<section id="dashboard" class="section active"><div id="stockAlerts"></div><div class="grid"><div class="kpi">Ventes jour<b id="kpiDay">0 F</b></div><div class="kpi">Ventes mois<b id="kpiMonth">0 F</b></div><div class="kpi">Factures non payées<b id="kpiUnpaid">0</b></div><div class="kpi">Stock faible<b id="kpiLowStock">0</b></div></div><div class="grid-2"><div class="card"><h3>Recettes par serveuse</h3><div id="waitressStats">
+<section id="dashboard" class="section active"><div id="stockAlerts"></div><div class="grid"><div class="kpi">Ventes jour<b id="kpiDay">0 F</b></div><div class="kpi">Ventes mois<b id="kpiMonth">0 F</b></div><div class="kpi">Factures non payées<b id="kpiUnpaid">0</b></div><div class="kpi">Stock faible<b id="kpiLowStock">0</b></div></div><div class="grid-2"><div class="card"><h3>Classement des serveuses</h3>
+
+<div class="row" style="margin-bottom:10px">
+
+    <select id="rankingMonth">
+        <option value="1">Janvier</option>
+        <option value="2">Février</option>
+        <option value="3">Mars</option>
+        <option value="4">Avril</option>
+        <option value="5">Mai</option>
+        <option value="6">Juin</option>
+        <option value="7">Juillet</option>
+        <option value="8">Août</option>
+        <option value="9">Septembre</option>
+        <option value="10">Octobre</option>
+        <option value="11">Novembre</option>
+        <option value="12">Décembre</option>
+    </select>
+
+    <select id="rankingYear"></select>
+
+    <button class="blue" onclick="loadWaitressRanking()">
+        Afficher
+    </button>
+
+    <button class="success" onclick="exportWaitressRanking()">
+        Export Excel
+    </button>
+
+</div>
+
+<div id="waitressStats"></div>
   
 </section><div class="card" id="recentLogsCard"><h3>Dernières activités</h3><div id="recentLogs"></div></div></div><div class="card"><h3>Produits les plus vendus</h3><div id="topProducts"></div></div></section><div id="stockValueCard"></div>
 <div id="cashBalanceCard"></div>
@@ -366,45 +397,271 @@ if(currentUser.role === "admin"){
   recentLogs.innerHTML = rows.body ? rows.body + rows.btn : `<p class="muted">Aucun log.</p>`;
 
  if(currentUser.role !== "admin"){
-  waitressStats.innerHTML = `<p class="muted">Réservé à l’administration.</p>`;
+  waitressStats.innerHTML =
+    `<p class="muted">Réservé à l’administration.</p>`;
 }else{
+  initialiserFiltresClassement();
+  await loadWaitressRanking();
+}
 
-  const groupedItems = {};
+}
 
-  (stats.waitressItems || []).forEach(item => {
-    const name = item.waitress_name || "-";
 
-    if(!groupedItems[name]){
-      groupedItems[name] = [];
+function initialiserFiltresClassement(){
+
+  const monthSelect =
+    document.getElementById("rankingMonth");
+
+  const yearSelect =
+    document.getElementById("rankingYear");
+
+  if(!monthSelect || !yearSelect){
+    return;
+  }
+
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  /*
+    On initialise seulement la première fois,
+    afin de ne pas effacer le mois choisi
+    par l’administrateur.
+  */
+  if(!monthSelect.dataset.initialized){
+
+    monthSelect.value = String(currentMonth);
+
+    yearSelect.innerHTML = "";
+
+    for(
+      let year = currentYear;
+      year >= currentYear - 10;
+      year--
+    ){
+      yearSelect.innerHTML += `
+        <option value="${year}">
+          ${year}
+        </option>
+      `;
     }
 
-    groupedItems[name].push(item);
-  });
+    yearSelect.value = String(currentYear);
 
-  waitressStats.innerHTML = stats.waitressSales && stats.waitressSales.length ? `
-    <table>
-      <tr>
-        <th>Serveuse</th>
-        <th>Cumul ventes</th>
-        <th>Détail des ventes</th>
-      </tr>
+    monthSelect.dataset.initialized = "true";
+  }
+}
 
-      ${stats.waitressSales.map(w=>`
+async function loadWaitressRanking(){
+
+  if(
+    !currentUser ||
+    currentUser.role !== "admin"
+  ){
+    return;
+  }
+
+  const monthSelect =
+    document.getElementById("rankingMonth");
+
+  const yearSelect =
+    document.getElementById("rankingYear");
+
+  const container =
+    document.getElementById("waitressStats");
+
+  if(
+    !monthSelect ||
+    !yearSelect ||
+    !container
+  ){
+    return;
+  }
+
+  const selectedMonth =
+    Number(monthSelect.value);
+
+  const selectedYear =
+    Number(yearSelect.value);
+
+  container.innerHTML =
+    `<p class="muted">Chargement du classement...</p>`;
+
+  try{
+
+    const response = await fetch(
+      `/api/waitress-ranking?month=${selectedMonth}&year=${selectedYear}`,
+      {
+        headers:{
+          "Authorization":
+            "Bearer " +
+            sessionStorage.getItem("lounch_token")
+        }
+      }
+    );
+
+    const data = await response.json();
+
+    if(!response.ok){
+      container.innerHTML = `
+        <p class="muted">
+          ${data.error || "Impossible de charger le classement"}
+        </p>
+      `;
+      return;
+    }
+
+    const ranking = data.ranking || [];
+
+    if(!ranking.length){
+      container.innerHTML = `
+        <p class="muted">
+          Aucune serveuse trouvée.
+        </p>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <table>
         <tr>
-          <td>${w.waitress_name || "-"}</td>
-          <td><b>${money(w.total)}</b></td>
-          <td>
-            ${(groupedItems[w.waitress_name] || []).map(it=>`
-              • ${it.product_name} : <b>${it.qty}</b>
-            `).join("<br>")}
-          </td>
+          <th>Rang</th>
+          <th>Serveuse</th>
+          <th>Commandes payées</th>
+          <th>Total des ventes</th>
         </tr>
-      `).join("")}
-    </table>
-  ` : `<p class="muted">Aucune vente serveuse.</p>`;
+
+        ${ranking.map(waitress => `
+          <tr>
+            <td>
+              <b>${waitress.rank}</b>
+            </td>
+
+            <td>
+              ${waitress.waitressName || "-"}
+            </td>
+
+            <td>
+              ${waitress.invoiceCount || 0}
+            </td>
+
+            <td>
+              <b>${money(waitress.total)}</b>
+            </td>
+          </tr>
+        `).join("")}
+      </table>
+    `;
+
+  }catch(error){
+
+    console.error(
+      "Erreur classement serveuses :",
+      error
+    );
+
+    container.innerHTML = `
+      <p class="muted">
+        Erreur de connexion au serveur.
+      </p>
+    `;
+  }
 }
 
+async function exportWaitressRanking(){
+
+  if(
+    !currentUser ||
+    currentUser.role !== "admin"
+  ){
+    return alert(
+      "Accès réservé à l’administration."
+    );
+  }
+
+  const monthSelect =
+    document.getElementById("rankingMonth");
+
+  const yearSelect =
+    document.getElementById("rankingYear");
+
+  if(!monthSelect || !yearSelect){
+    return alert(
+      "Filtres du classement introuvables."
+    );
+  }
+
+  const selectedMonth =
+    Number(monthSelect.value);
+
+  const selectedYear =
+    Number(yearSelect.value);
+
+  try{
+
+    const response = await fetch(
+      `/api/reports/transactions?type=month&month=${selectedMonth}&year=${selectedYear}`,
+      {
+        headers:{
+          "Authorization":
+            "Bearer " +
+            sessionStorage.getItem("lounch_token")
+        }
+      }
+    );
+
+    if(!response.ok){
+
+      let message =
+        "Impossible d’exporter le rapport.";
+
+      try{
+        const errorData =
+          await response.json();
+
+        message =
+          errorData.error || message;
+      }catch(error){
+        // La réponse n’était pas en JSON.
+      }
+
+      return alert(message);
+    }
+
+    const fileBlob =
+      await response.blob();
+
+    const downloadUrl =
+      URL.createObjectURL(fileBlob);
+
+    const link =
+      document.createElement("a");
+
+    link.href = downloadUrl;
+
+    link.download =
+      `historique-ventes-serveuses-${selectedYear}-${String(selectedMonth).padStart(2,"0")}.xlsx`;
+
+    document.body.appendChild(link);
+
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(downloadUrl);
+
+  }catch(error){
+
+    console.error(
+      "Erreur export serveuses :",
+      error
+    );
+
+    alert(
+      "Erreur de connexion pendant l’export."
+    );
+  }
 }
+
  async function saveUser(){
   if(!requireRoles(["admin"])) return alert("Accès refusé");
 
